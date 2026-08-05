@@ -22,15 +22,28 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Full name is required'],
       trim: true,
     },
+    phone: { type: String, default: '-' },
+    country: { type: String, default: 'India' },
+    city: { type: String, default: '' },
+    dob: { type: Date },
+    gender: { type: String, default: 'Not specified' },
+    occupation: { type: String, default: 'Founder / Executive' },
+    position: { type: String, default: 'CEO' },
+    experience: { type: String, default: '5+ years' },
     role: {
       type: String,
-      enum: ['analyst', 'admin'],
-      default: 'analyst',
+      enum: ['founder', 'investor', 'analyst', 'advisor', 'admin', 'super_admin'],
+      default: 'founder',
     },
-    avatarUrl: {
+    accountStatus: {
       type: String,
-      default: '',
+      enum: ['Active', 'Inactive'],
+      default: 'Active',
     },
+    verified: { type: Boolean, default: false },
+    loginCount: { type: Number, default: 0 },
+    lastLogin: { type: Date },
+    avatarUrl: { type: String, default: '' },
   },
   { timestamps: true }
 );
