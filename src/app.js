@@ -45,6 +45,18 @@ app.get('/api/v1/health', (req, res) => {
   }, 'API v1 Health check passed'));
 });
 
+app.use((req, res, next) => {
+    console.log(`Received ${req.method} request with body:`, req.body);
+    console.log(`Received ${req.method} request with params:`, req.params);
+    next();
+});
+
+app.use((req, res, next) => {
+    console.log("➡️ Incoming request:", req.method, req.originalUrl);
+    next();
+});
+
+
 // 5. App Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/companies', companyRoutes);
