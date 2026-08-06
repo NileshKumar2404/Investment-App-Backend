@@ -12,11 +12,14 @@ import { ApiResponse } from './utils/ApiResponse.js';
 
 const app = express();
 
-// 1. Security Headers & CORS Configuration
+// 1. Trust Proxy Configuration for Render / Cloudflare / Nginx
+app.set('trust proxy', 1);
+
+// 2. Security Headers & CORS Configuration
 app.use(helmet());
 app.use(cors({ origin: '*', credentials: true }));
 
-// 2. Rate Limiter (200 requests per 15-minute window)
+// 3. Rate Limiter (200 requests per 15-minute window)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -24,11 +27,11 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// 3. Body Parsing Middleware
+// 4. Body Parsing Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 4. API Health Check Endpoint
+// 5. API Health Check Endpoint
 app.get('/health', (req, res) => {
   res.status(200).json(new ApiResponse(200, {
     status: 'online',
@@ -45,30 +48,24 @@ app.get('/api/v1/health', (req, res) => {
   }, 'API v1 Health check passed'));
 });
 
+// Logging Middleware
 app.use((req, res, next) => {
-    console.log(`Received ${req.method} request with body:`, req.body);
-    console.log(`Received ${req.method} request with params:`, req.params);
-    next();
+  console.log('➡️ Incoming request:', req.method, req.originalUrl);
+  next();
 });
 
-app.use((req, res, next) => {
-    console.log("➡️ Incoming request:", req.method, req.originalUrl);
-    next();
-});
-
-
-// 5. App Routes
+// 6. App Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/companies', companyRoutes);
 app.use('/api/v1/ledger', ledgerRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 
-// 6. 404 Route Handler
+// 7. 404 Route Handler
 app.use((req, res, next) => {
   next(new ApiError(404, `Route not found: ${req.originalUrl}`));
 });
 
-// 7. Global Error Handler Middleware
+// 8. Global Error Handler Middleware
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
