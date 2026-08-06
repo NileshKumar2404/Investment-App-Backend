@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
 import companyRoutes from './routes/companyRoutes.js';
 import ledgerRoutes from './routes/ledgerRoutes.js';
+import uploadRoutes from './routes/uploadRoutes.js';
 import { ApiError } from './utils/ApiError.js';
 import { ApiResponse } from './utils/ApiResponse.js';
 
@@ -48,6 +49,7 @@ app.get('/api/v1/health', (req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/companies', companyRoutes);
 app.use('/api/v1/ledger', ledgerRoutes);
+app.use('/api/v1/upload', uploadRoutes);
 
 // 6. 404 Route Handler
 app.use((req, res, next) => {
