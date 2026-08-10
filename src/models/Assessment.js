@@ -23,6 +23,7 @@ const assessmentSchema = new mongoose.Schema(
     archetype: {
       type: String,
       required: true,
+      default: 'Strategic Visionary',
     },
     domainScores: {
       strategy: { type: Number, default: 0 },
@@ -31,10 +32,25 @@ const assessmentSchema = new mongoose.Schema(
       leadership: { type: Number, default: 0 },
       marketing: { type: Number, default: 0 },
     },
+    subskillScores: {
+      type: Map,
+      of: Number,
+    },
     answers: {
       type: Map,
       of: String,
     },
+    reviewStatus: {
+      type: String,
+      enum: ['PENDING', 'IN_REVIEW', 'APPROVED', 'REQUIRES_FOLLOW_UP', 'REJECTED'],
+      default: 'PENDING',
+    },
+    reviewNotes: { type: String, default: '' },
+    reviewedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    reviewedAt: { type: Date },
   },
   { timestamps: true }
 );

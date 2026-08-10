@@ -13,7 +13,7 @@ const generateToken = (id) => {
 // @desc    Register new user
 // @route   POST /api/v1/auth/register
 export const registerUser = asyncHandler(async (req, res) => {
-  const { email, password, fullName } = req.body;
+  const { email, password, fullName, phone, country, language, currency, role } = req.body;
 
   if (!email || !password || !fullName) {
     throw new ApiError(400, 'Please provide email, password, and full name');
@@ -24,7 +24,21 @@ export const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'User with this email already exists');
   }
 
-  const user = await User.create({ email, password, fullName });
+  const user = await User.create({
+    email,
+    password,
+    fullName,
+    phone: phone || '-',
+    country: country || 'India',
+    language: language || 'English',
+    currency: currency || 'INR',
+    role: role || 'founder',
+    accountStatus: 'Active',
+    verified: true,
+    loginCount: 1,
+    lastLogin: new Date(),
+  });
+
   const token = generateToken(user._id);
 
   const responseData = {
@@ -33,6 +47,8 @@ export const registerUser = asyncHandler(async (req, res) => {
       id: user._id,
       fullName: user.fullName,
       email: user.email,
+      phone: user.phone,
+      country: user.country,
       role: user.role,
     },
   };
@@ -54,6 +70,10 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Invalid email or password');
   }
 
+  user.loginCount = (user.loginCount || 0) + 1;
+  user.lastLogin = new Date();
+  await user.save();
+
   const token = generateToken(user._id);
   const responseData = {
     token,
@@ -61,6 +81,8 @@ export const loginUser = asyncHandler(async (req, res) => {
       id: user._id,
       fullName: user.fullName,
       email: user.email,
+      phone: user.phone,
+      country: user.country,
       role: user.role,
     },
   };
@@ -75,6 +97,66 @@ export const getMe = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Not authenticated');
   }
   return res.status(200).json(new ApiResponse(200, req.user, 'User profile fetched successfully'));
+});
+
+// @desc    Logout user
+// @route   POST /api/v1/auth/logout
+export const logoutUser = asyncHandler(async (req, res) => {
+  return res.status(200).json(new ApiResponse(200, null, 'Logged out successfully'));
+});
+
+// @desc    Change user password
+// @route   POST /api/v1/auth/change-password
+export const changePassword = asyncHandler(async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) {
+    throw new ApiError(400, 'Both old and new passwords are required');
+  }
+
+  const user = await User.findById(req.user._id).select('+password');
+  if (!user || !(await user.matchPassword(oldPassword))) {
+    throw new ApiError(401, 'Incorrect old password');
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  return res.status(200).json(new ApiResponse(200, null, 'Password changed successfully'));
+});
+
+// @desc    Forgot Password Request
+// @route   POST /api/v1/auth/forgot-password
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    throw new ApiError(400, 'Please provide email address');
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(200).json(new ApiResponse(200, null, 'If that email is registered, a password reset link has been generated.'));
+  }
+
+  return res.status(200).json(new ApiResponse(200, { resetToken: 'demo_reset_token_' + Date.now() }, 'Password reset instructions dispatched.'));
+});
+
+// @desc    Reset Password
+// @route   POST /api/v1/auth/reset-password
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { email, resetToken, newPassword } = req.body;
+  if (!email || !newPassword) {
+    throw new ApiError(400, 'Email and new password are required');
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  return res.status(200).json(new ApiResponse(200, null, 'Password reset successfully'));
 });
 
 // @desc    Refresh token

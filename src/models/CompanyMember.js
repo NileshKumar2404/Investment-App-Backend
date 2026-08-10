@@ -16,17 +16,21 @@ const companyMemberSchema = new mongoose.Schema(
     },
     roleOnCompany: {
       type: String,
-      enum: ['Founder', 'Co-Founder', 'Finance Director', 'Viewer'],
-      default: 'Viewer',
+      enum: ['OWNER', 'FOUNDER', 'CO_FOUNDER', 'FINANCE', 'ANALYST', 'ADVISOR', 'VIEWER', 'Founder', 'Co-Founder', 'Finance Director', 'Viewer'],
+      default: 'VIEWER',
     },
     status: {
       type: String,
-      enum: ['Invited', 'Active', 'Suspended'],
-      default: 'Active',
+      enum: ['INVITED', 'ACTIVE', 'SUSPENDED', 'REMOVED', 'Invited', 'Active', 'Suspended'],
+      default: 'ACTIVE',
     },
     invitedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
+    },
+    joinedAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   { timestamps: true }
