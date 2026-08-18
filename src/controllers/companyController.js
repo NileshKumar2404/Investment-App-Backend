@@ -32,10 +32,33 @@ const logActivity = async (
 // @desc    Get all saved companies (user specific + presets)
 // @route   GET /api/v1/companies
 export const getCompanies = asyncHandler(async (req, res) => {
-  const userId = req.user ? req.user._id : null;
-  const query = userId ? { $or: [{ userId }, { isPreset: true }] } : {};
+  const userId = req.user._id;
 
-  const companies = await Company.find(query).sort({ updatedAt: -1 });
+  const memberships = await CompanyMember.find({
+    userId,
+    status: "ACTIVE",
+  }).select("companyId");
+
+  const companyIds = memberships.map((membership) => membership.companyId);
+
+  const companies = await Company.find({
+    $or: [
+      {
+        _id: {
+          $in: companyIds,
+        },
+      },
+      {
+        userId,
+      },
+      {
+        isPreset: true,
+      },
+    ],
+  }).sort({
+    updatedAt: -1,
+  });
+
   return res
     .status(200)
     .json(new ApiResponse(200, companies, "Companies retrieved successfully"));
@@ -44,11 +67,35 @@ export const getCompanies = asyncHandler(async (req, res) => {
 // @desc    Search companies by query (name, ticker, sector)
 // @route   GET /api/v1/companies/search
 export const searchCompanies = asyncHandler(async (req, res) => {
-  const { q } = req.query;
-  if (!q || q.trim() === "") {
-    const userId = req.user ? req.user._id : null;
-    const query = userId ? { $or: [{ userId }, { isPreset: true }] } : {};
-    const companies = await Company.find(query).sort({ updatedAt: -1 });
+  const { q = "" } = req.query;
+  const userId = req.user._id;
+
+  const memberships = await CompanyMember.find({
+    userId,
+    status: "ACTIVE",
+  }).select("companyId");
+
+  const companyIds = memberships.map((membership) => membership.companyId);
+
+  if (!q.trim()) {
+    const companies = await Company.find({
+      $or: [
+        {
+          _id: {
+            $in: companyIds,
+          },
+        },
+        {
+          userId,
+        },
+        {
+          isPreset: true,
+        },
+      ],
+    }).sort({
+      updatedAt: -1,
+    });
+
     return res
       .status(200)
       .json(
@@ -57,11 +104,42 @@ export const searchCompanies = asyncHandler(async (req, res) => {
   }
 
   const regex = new RegExp(q.trim(), "i");
-  const searchFilter = {
-    $or: [{ ticker: regex }, { companyName: regex }, { sector: regex }],
-  };
 
-  const companies = await Company.find(searchFilter).sort({ updatedAt: -1 });
+  const companies = await Company.find({
+    $and: [
+      {
+        $or: [
+          {
+            _id: {
+              $in: companyIds,
+            },
+          },
+          {
+            userId,
+          },
+          {
+            isPreset: true,
+          },
+        ],
+      },
+      {
+        $or: [
+          {
+            ticker: regex,
+          },
+          {
+            companyName: regex,
+          },
+          {
+            sector: regex,
+          },
+        ],
+      },
+    ],
+  }).sort({
+    updatedAt: -1,
+  });
+
   return res
     .status(200)
     .json(
@@ -76,8 +154,7 @@ export const searchCompanies = asyncHandler(async (req, res) => {
 // @desc    Get single company by ticker
 // @route   GET /api/v1/companies/:ticker
 export const getCompanyByTicker = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
-  const company = await Company.findOne({ ticker: ticker.toUpperCase() });
+  const company = req.company;
 
   if (!company) {
     throw new ApiError(404, `Company with ticker ${ticker} not found`);
@@ -93,7 +170,7 @@ export const getCompanyByTicker = asyncHandler(async (req, res) => {
 export const saveCompany = asyncHandler(async (req, res) => {
   const inputData = req.body;
 
-  const userId = req.user ? req.user._id : null;
+  const userId = req.user._id;
 
   if (!inputData.companyName?.trim()) {
     throw new ApiError(400, "Company name is required");
@@ -178,22 +255,26 @@ export const saveCompany = asyncHandler(async (req, res) => {
     },
   );
 
-  if (userId) {
-    await CompanyMember.findOneAndUpdate(
-      {
-        companyId: company._id,
-        userId,
-      },
-      {
-        roleOnCompany: "OWNER",
-        status: "ACTIVE",
-      },
-      {
-        upsert: true,
-        setDefaultsOnInsert: true,
-      },
-    );
-  }
+  await CompanyMember.findOneAndUpdate(
+    {
+      companyId: company._id,
+
+      userId,
+    },
+
+    {
+      roleOnCompany: "OWNER",
+
+      status: "ACTIVE",
+
+      invitedBy: userId,
+    },
+
+    {
+      upsert: true,
+      setDefaultsOnInsert: true,
+    },
+  );
 
   await logActivity(
     company._id,
@@ -211,22 +292,29 @@ export const saveCompany = asyncHandler(async (req, res) => {
 // @desc    Get KYC Details
 // @route   GET /api/v1/companies/:ticker/kyc
 export const getKyc = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
-  const company = await Company.findOne({ ticker: ticker.toUpperCase() });
+  const company = req.company;
 
   if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+    throw new ApiError(404, "Company not found");
   }
 
   const kycData = {
     gstin: company.gstin,
+
     pan: company.pan,
+
     cin: company.cin,
+
     registrationNumber: company.registrationNumber,
+
     dateOfIncorporation: company.dateOfIncorporation,
+
     registeredOfficeAddress: company.registeredOfficeAddress,
+
     website: company.website,
+
     businessEmail: company.businessEmail,
+
     businessPhone: company.businessPhone,
   };
 
@@ -238,7 +326,12 @@ export const getKyc = asyncHandler(async (req, res) => {
 // @desc    Update KYC Details
 // @route   PUT /api/v1/companies/:ticker/kyc
 export const updateKyc = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
+  const company = req.company;
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
   const {
     gstin,
     pan,
@@ -250,28 +343,31 @@ export const updateKyc = asyncHandler(async (req, res) => {
     businessPhone,
   } = req.body;
 
-  const company = await Company.findOneAndUpdate(
-    { ticker: ticker.toUpperCase() },
-    {
-      gstin: (gstin || "").toUpperCase(),
-      pan: (pan || "").toUpperCase(),
-      cin: (cin || "").toUpperCase(),
-      registrationNumber: registrationNumber || "",
-      registeredOfficeAddress: registeredOfficeAddress || "",
-      website: website || "",
-      businessEmail: businessEmail || "",
-      businessPhone: businessPhone || "",
-    },
-    { new: true },
-  );
-
-  if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+  if (businessEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessEmail)) {
+    throw new ApiError(400, "Invalid business email");
   }
+
+  company.gstin = gstin ? gstin.toUpperCase() : "";
+
+  company.pan = pan ? pan.toUpperCase() : "";
+
+  company.cin = cin ? cin.toUpperCase() : "";
+
+  company.registrationNumber = registrationNumber || "";
+
+  company.registeredOfficeAddress = registeredOfficeAddress || "";
+
+  company.website = website || "";
+
+  company.businessEmail = businessEmail || "";
+
+  company.businessPhone = businessPhone || "";
+
+  await company.save();
 
   await logActivity(
     company._id,
-    req.user?._id,
+    req.user._id,
     "KYC_UPDATED",
     "KYC",
     "Company KYC statutory registration details updated.",
@@ -285,21 +381,27 @@ export const updateKyc = asyncHandler(async (req, res) => {
 // @desc    Get Funding & Investment Profile
 // @route   GET /api/v1/companies/:ticker/funding
 export const getFunding = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
-  const company = await Company.findOne({ ticker: ticker.toUpperCase() });
+  const company = req.company;
 
   if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+    throw new ApiError(404, "Company not found");
   }
 
   const funding = {
     minInvestment: company.minInvestment,
+
     maxInvestment: company.maxInvestment,
+
     fundingRequired: company.fundingRequired,
+
     equityOffered: company.equityOffered,
+
     valuation: company.valuation,
+
     expectedROI: company.expectedROI,
+
     valuationSource: company.valuationSource,
+
     valuationStatus: company.valuationStatus,
   };
 
@@ -313,7 +415,12 @@ export const getFunding = asyncHandler(async (req, res) => {
 // @desc    Update Funding & Investment Profile
 // @route   PUT /api/v1/companies/:ticker/funding
 export const updateFunding = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
+  const company = req.company;
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
   const {
     minInvestment,
     maxInvestment,
@@ -323,29 +430,46 @@ export const updateFunding = asyncHandler(async (req, res) => {
     expectedROI,
   } = req.body;
 
-  const company = await Company.findOneAndUpdate(
-    { ticker: ticker.toUpperCase() },
-    {
-      minInvestment:
-        minInvestment !== undefined ? Number(minInvestment) : 100000,
-      maxInvestment:
-        maxInvestment !== undefined ? Number(maxInvestment) : 1000000,
-      fundingRequired:
-        fundingRequired !== undefined ? Number(fundingRequired) : 500000,
-      equityOffered: equityOffered !== undefined ? Number(equityOffered) : 10.0,
-      valuation: valuation !== undefined ? Number(valuation) : 5000000,
-      expectedROI: expectedROI !== undefined ? Number(expectedROI) : 25.0,
-    },
-    { new: true },
-  );
+  const values = {
+    minInvestment:
+      minInvestment !== undefined
+        ? Number(minInvestment)
+        : company.minInvestment,
 
-  if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+    maxInvestment:
+      maxInvestment !== undefined
+        ? Number(maxInvestment)
+        : company.maxInvestment,
+
+    fundingRequired:
+      fundingRequired !== undefined
+        ? Number(fundingRequired)
+        : company.fundingRequired,
+
+    equityOffered:
+      equityOffered !== undefined
+        ? Number(equityOffered)
+        : company.equityOffered,
+
+    valuation: valuation !== undefined ? Number(valuation) : company.valuation,
+
+    expectedROI:
+      expectedROI !== undefined ? Number(expectedROI) : company.expectedROI,
+  };
+
+  for (const [field, value] of Object.entries(values)) {
+    if (Number.isNaN(value)) {
+      throw new ApiError(400, `${field} must be a valid number`);
+    }
   }
+
+  Object.assign(company, values);
+
+  await company.save();
 
   await logActivity(
     company._id,
-    req.user?._id,
+    req.user._id,
     "FUNDING_UPDATED",
     "FUNDING",
     "Company funding & investment parameters updated.",
@@ -361,26 +485,35 @@ export const updateFunding = asyncHandler(async (req, res) => {
 // @desc    Update SWOT Analysis
 // @route   POST /api/v1/companies/:ticker/swot
 export const updateSwot = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
-  const { strengths, weaknesses, opportunities, threats, swotItems } = req.body;
-
-  const company = await Company.findOneAndUpdate(
-    { ticker: ticker.toUpperCase() },
-    {
-      swot: {
-        strengths: strengths || [],
-        weaknesses: weaknesses || [],
-        opportunities: opportunities || [],
-        threats: threats || [],
-      },
-      swotItems: swotItems || [],
-    },
-    { new: true },
-  );
+  const company = req.company;
 
   if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+    throw new ApiError(404, "Company not found");
   }
+
+  const { strengths, weaknesses, opportunities, threats, swotItems } = req.body;
+
+  company.swot = {
+    strengths: Array.isArray(strengths) ? strengths : [],
+
+    weaknesses: Array.isArray(weaknesses) ? weaknesses : [],
+
+    opportunities: Array.isArray(opportunities) ? opportunities : [],
+
+    threats: Array.isArray(threats) ? threats : [],
+  };
+
+  company.swotItems = Array.isArray(swotItems) ? swotItems : [];
+
+  await company.save();
+
+  await logActivity(
+    company._id,
+    req.user._id,
+    "SWOT_UPDATED",
+    "STRATEGY",
+    "SWOT analysis updated.",
+  );
 
   return res
     .status(200)
@@ -392,7 +525,12 @@ export const updateSwot = asyncHandler(async (req, res) => {
 // @desc    Update PESTLE Analysis
 // @route   POST /api/v1/companies/:ticker/pestle
 export const updatePestle = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
+  const company = req.company;
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
   const {
     political,
     economic,
@@ -403,25 +541,31 @@ export const updatePestle = asyncHandler(async (req, res) => {
     pestleItems,
   } = req.body;
 
-  const company = await Company.findOneAndUpdate(
-    { ticker: ticker.toUpperCase() },
-    {
-      pestle: {
-        political: political || [],
-        economic: economic || [],
-        social: social || [],
-        technological: technological || [],
-        legal: legal || [],
-        environmental: environmental || [],
-      },
-      pestleItems: pestleItems || [],
-    },
-    { new: true },
-  );
+  company.pestle = {
+    political: Array.isArray(political) ? political : [],
 
-  if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
-  }
+    economic: Array.isArray(economic) ? economic : [],
+
+    social: Array.isArray(social) ? social : [],
+
+    technological: Array.isArray(technological) ? technological : [],
+
+    legal: Array.isArray(legal) ? legal : [],
+
+    environmental: Array.isArray(environmental) ? environmental : [],
+  };
+
+  company.pestleItems = Array.isArray(pestleItems) ? pestleItems : [];
+
+  await company.save();
+
+  await logActivity(
+    company._id,
+    req.user._id,
+    "PESTLE_UPDATED",
+    "STRATEGY",
+    "PESTLE analysis updated.",
+  );
 
   return res
     .status(200)
@@ -437,16 +581,13 @@ export const updatePestle = asyncHandler(async (req, res) => {
 // @desc    Submit / Calculate Founder Assessment
 // @route   POST /api/v1/companies/:ticker/assessment
 export const submitAssessment = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
-  const { answers } = req.body;
-
-  const company = await Company.findOne({
-    ticker: ticker.toUpperCase(),
-  });
+  const company = req.company;
 
   if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+    throw new ApiError(404, "Company not found");
   }
+
+  const { answers } = req.body;
 
   if (
     !answers ||
@@ -469,9 +610,13 @@ export const submitAssessment = asyncHandler(async (req, res) => {
 
   const domainScores = {
     strategy: rawScore,
+
     operations: rawScore,
+
     finance: rawScore,
+
     leadership: rawScore,
+
     marketing: rawScore,
   };
 
@@ -486,7 +631,7 @@ export const submitAssessment = asyncHandler(async (req, res) => {
   }
 
   const assessment = await Assessment.create({
-    userId: req.user ? req.user._id : company.userId,
+    userId: req.user._id,
 
     companyId: company._id,
 
@@ -502,12 +647,16 @@ export const submitAssessment = asyncHandler(async (req, res) => {
   });
 
   company.assessmentCompleted = true;
+
   company.assessmentScore = rawScore;
+
   company.assessmentArchetype = archetype;
+
   company.assessmentDomainScores = domainScores;
 
   company.completeness = {
     ...(company.completeness?.toObject?.() || company.completeness || {}),
+
     assessment: 100,
   };
 
@@ -515,7 +664,7 @@ export const submitAssessment = asyncHandler(async (req, res) => {
 
   await logActivity(
     company._id,
-    req.user?._id,
+    req.user._id,
     "ASSESSMENT_SUBMITTED",
     "ASSESSMENT",
     `Founder competency assessment submitted. Score: ${rawScore}/100.`,
@@ -535,17 +684,18 @@ export const submitAssessment = asyncHandler(async (req, res) => {
 // @desc    Get Team Members for Company
 // @route   GET /api/v1/companies/:ticker/members
 export const getTeamMembers = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
-  const company = await Company.findOne({ ticker: ticker.toUpperCase() });
+  const company = req.company;
 
   if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+    throw new ApiError(404, "Company not found");
   }
 
-  const members = await CompanyMember.find({ companyId: company._id }).populate(
-    "userId",
-    "fullName email phone position avatarUrl",
-  );
+  const members = await CompanyMember.find({
+    companyId: company._id,
+
+    status: "ACTIVE",
+  }).populate("userId", "fullName email phone position avatarUrl role");
+
   return res
     .status(200)
     .json(new ApiResponse(200, members, "Team members retrieved successfully"));
@@ -554,44 +704,100 @@ export const getTeamMembers = asyncHandler(async (req, res) => {
 // @desc    Add / Invite Team Member
 // @route   POST /api/v1/companies/:ticker/members
 export const addTeamMember = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
+  const company = req.company;
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
   const { email, roleOnCompany } = req.body;
 
-  if (!email) {
+  if (!email?.trim()) {
     throw new ApiError(400, "User email is required to add team member");
   }
 
-  const company = await Company.findOne({ ticker: ticker.toUpperCase() });
-  if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const allowedRoles = [
+    "FOUNDER",
+    "CO_FOUNDER",
+    "FINANCE",
+    "ANALYST",
+    "ADVISOR",
+    "VIEWER",
+  ];
+
+  const normalizedRole = String(roleOnCompany || "VIEWER")
+    .trim()
+    .toUpperCase();
+
+  if (!allowedRoles.includes(normalizedRole)) {
+    throw new ApiError(400, "Invalid company role");
   }
 
-  let user = await User.findOne({ email });
+  /**
+   * Do not allow the requester to create
+   * another OWNER through the invitation API.
+   */
+  if (normalizedRole === "OWNER") {
+    throw new ApiError(
+      403,
+      "Owner role cannot be assigned through team invitation.",
+    );
+  }
+
+  let user = await User.findOne({
+    email: normalizedEmail,
+  });
+
   if (!user) {
-    user = await User.create({
-      email,
-      fullName: email.split("@")[0],
-      password: "DefaultUserPassword123!",
-      role: "founder",
-    });
+    /**
+     * IMPORTANT:
+     *
+     * We should not create a fake user with a
+     * hardcoded password.
+     *
+     * Instead create an invitation/pending account
+     * flow later.
+     *
+     * For now, require the user to already exist.
+     */
+    throw new ApiError(
+      404,
+      "No user exists with this email. Ask the user to register first.",
+    );
   }
 
   const member = await CompanyMember.findOneAndUpdate(
-    { companyId: company._id, userId: user._id },
     {
-      roleOnCompany: roleOnCompany || "VIEWER",
-      status: "ACTIVE",
-      invitedBy: req.user ? req.user._id : null,
+      companyId: company._id,
+
+      userId: user._id,
     },
-    { new: true, upsert: true },
-  ).populate("userId", "fullName email phone position avatarUrl");
+
+    {
+      roleOnCompany: normalizedRole,
+
+      status: "ACTIVE",
+
+      invitedBy: req.user._id,
+    },
+
+    {
+      new: true,
+
+      upsert: true,
+
+      setDefaultsOnInsert: true,
+    },
+  ).populate("userId", "fullName email phone position avatarUrl role");
 
   await logActivity(
     company._id,
-    req.user?._id,
+    req.user._id,
     "MEMBER_ADDED",
     "TEAM",
-    `Added ${email} to team with role ${roleOnCompany || "VIEWER"}.`,
+    `Added ${normalizedEmail} to team with role ${normalizedRole}.`,
   );
 
   return res
@@ -602,16 +808,18 @@ export const addTeamMember = asyncHandler(async (req, res) => {
 // @desc    Get Timeline Activity Logs
 // @route   GET /api/v1/companies/:ticker/timeline
 export const getTimeline = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
-  const company = await Company.findOne({ ticker: ticker.toUpperCase() });
+  const company = req.company;
 
   if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
+    throw new ApiError(404, "Company not found");
   }
 
-  const timeline = await CompanyActivity.find({ companyId: company._id }).sort({
+  const timeline = await CompanyActivity.find({
+    companyId: company._id,
+  }).sort({
     createdAt: -1,
   });
+
   return res
     .status(200)
     .json(
@@ -622,14 +830,23 @@ export const getTimeline = asyncHandler(async (req, res) => {
 // @desc    Delete company by ticker
 // @route   DELETE /api/v1/companies/:ticker
 export const deleteCompany = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
-  const company = await Company.findOneAndDelete({
-    ticker: ticker.toUpperCase(),
-  });
+  const company = req.company;
 
   if (!company) {
-    throw new ApiError(404, `Company with ticker ${ticker} not found`);
+    throw new ApiError(404, "Company not found");
   }
+
+  const ticker = company.ticker;
+
+  await CompanyMember.deleteMany({
+    companyId: company._id,
+  });
+
+  await CompanyActivity.deleteMany({
+    companyId: company._id,
+  });
+
+  await Company.findByIdAndDelete(company._id);
 
   return res
     .status(200)
@@ -637,7 +854,12 @@ export const deleteCompany = asyncHandler(async (req, res) => {
 });
 
 export const updateTeamRoster = asyncHandler(async (req, res) => {
-  const { ticker } = req.params;
+  const company = req.company;
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
   const {
     founderName,
     coFounderNames,
@@ -646,34 +868,21 @@ export const updateTeamRoster = asyncHandler(async (req, res) => {
     teamMembers,
   } = req.body;
 
-  const company = await Company.findOneAndUpdate(
-    {
-      ticker: ticker.toUpperCase(),
-    },
-    {
-      founderName: founderName || "",
+  company.founderName = founderName || "";
 
-      coFounderNames: Array.isArray(coFounderNames) ? coFounderNames : [],
+  company.coFounderNames = Array.isArray(coFounderNames) ? coFounderNames : [];
 
-      headcount: Number(headcount || 0),
+  company.headcount = Number(headcount || 0);
 
-      businessExperience: businessExperience || "",
+  company.businessExperience = businessExperience || "";
 
-      teamMembers: Array.isArray(teamMembers) ? teamMembers : [],
-    },
-    {
-      new: true,
-      runValidators: true,
-    },
-  );
+  company.teamMembers = Array.isArray(teamMembers) ? teamMembers : [];
 
-  if (!company) {
-    throw new ApiError(404, `Company ${ticker} not found`);
-  }
+  await company.save();
 
   await logActivity(
     company._id,
-    req.user?._id,
+    req.user._id,
     "TEAM_UPDATED",
     "TEAM",
     "Company founder and team roster updated.",
