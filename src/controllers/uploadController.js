@@ -7,13 +7,9 @@ import path from "path";
 
 const storage = multer.memoryStorage();
 
-const ALLOWED_MIME_TYPES = new set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-]);
+const ALLOWED_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 
-const ALLOWED_EXTENSIONS = new set([".pdf", ".jpg", ".jpeg", ".png"]);
+const ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
 
 const fileFilter = (req, file, callback) => {
   try {
@@ -21,11 +17,11 @@ const fileFilter = (req, file, callback) => {
 
     const mimeType = file.mimeType.toLowerCase();
 
-    const isValidMimeType = ALLOWED_MIME_TYPES.has(mimeType);
+    const isValidMimeType = ALLOWED_MIME_TYPES.includes(mimeType);
 
-    const isValidExtenstion = ALLOWED_EXTENSIONS.has(extension);
+    const isValidExtenstion = ALLOWED_EXTENSIONS.includes(extension);
 
-    if (!isValidMimeType || !isValidExtension) {
+    if (!isValidMimeType || !isValidExtenstion) {
       return callback(
         new ApiError(
           400,
@@ -80,8 +76,8 @@ export const uploadFileToCloudinary = async (req, res, next) => {
     const fileSize = req.file.size;
 
     if (
-      !ALLOWED_MIME_TYPES.has(mimeType) ||
-      !ALLOWED_EXTENSIONS.has(extension)
+      !ALLOWED_MIME_TYPES.includes(mimeType) ||
+      !ALLOWED_EXTENSIONS.includes(extension)
     ) {
       return res
         .status(400)
