@@ -3,12 +3,16 @@ import CompanyMember from "../models/CompanyMember.js";
 import CompanyActivity from "../models/CompanyActivity.js";
 import Assessment from "../models/Assessment.js";
 import User from "../models/User.js";
+
 import { InvestmentCalcEngine } from "../services/calcEngine.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 
-// Helper for timeline logging
+// ============================================================
+// ACTIVITY LOGGER
+// ============================================================
+
 const logActivity = async (
   companyId,
   userId,
@@ -24,12 +28,36 @@ const logActivity = async (
       category,
       description,
     });
-  } catch (e) {
-    console.error("Activity log error:", e);
+  } catch (error) {
+    /**
+     * Activity logging should never make
+     * the main business operation fail.
+     */
+    console.error("Activity log error:", error);
   }
 };
 
-// @desc    Get all saved companies (user specific + presets)
+// ============================================================
+// ROLE HELPERS
+// ============================================================
+
+const normalizeRole = (role) => {
+  return String(role || "")
+    .trim()
+    .toUpperCase();
+};
+
+const isCompanyOwnerOrFounder = (role) => {
+  const normalizedRole = normalizeRole(role);
+
+  return ["OWNER", "FOUNDER"].includes(normalizedRole);
+};
+
+// ============================================================
+// GET ALL COMPANIES
+// ============================================================
+
+// @desc    Get all saved companies for the current user
 // @route   GET /api/v1/companies
 export const getCompanies = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -48,9 +76,11 @@ export const getCompanies = asyncHandler(async (req, res) => {
           $in: companyIds,
         },
       },
+
       {
         userId,
       },
+
       {
         isPreset: true,
       },
@@ -64,10 +94,15 @@ export const getCompanies = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, companies, "Companies retrieved successfully"));
 });
 
-// @desc    Search companies by query (name, ticker, sector)
+// ============================================================
+// SEARCH COMPANIES
+// ============================================================
+
+// @desc    Search companies by name, ticker, or sector
 // @route   GET /api/v1/companies/search
 export const searchCompanies = asyncHandler(async (req, res) => {
   const { q = "" } = req.query;
+
   const userId = req.user._id;
 
   const memberships = await CompanyMember.find({
@@ -85,9 +120,11 @@ export const searchCompanies = asyncHandler(async (req, res) => {
             $in: companyIds,
           },
         },
+
         {
           userId,
         },
+
         {
           isPreset: true,
         },
@@ -114,22 +151,27 @@ export const searchCompanies = asyncHandler(async (req, res) => {
               $in: companyIds,
             },
           },
+
           {
             userId,
           },
+
           {
             isPreset: true,
           },
         ],
       },
+
       {
         $or: [
           {
             ticker: regex,
           },
+
           {
             companyName: regex,
           },
+
           {
             sector: regex,
           },
@@ -151,13 +193,17 @@ export const searchCompanies = asyncHandler(async (req, res) => {
     );
 });
 
+// ============================================================
+// GET COMPANY BY TICKER
+// ============================================================
+
 // @desc    Get single company by ticker
 // @route   GET /api/v1/companies/:ticker
 export const getCompanyByTicker = asyncHandler(async (req, res) => {
   const company = req.company;
 
   if (!company) {
-    throw new ApiError(404, `Company with ticker ${ticker} not found`);
+    throw new ApiError(404, "Company not found");
   }
 
   return res
@@ -165,12 +211,20 @@ export const getCompanyByTicker = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, company, "Company fetched successfully"));
 });
 
-// @desc    Create or update company profile
+// ============================================================
+// CREATE OR UPDATE COMPANY
+// ============================================================
+
+// @desc    Create a new company or update a company the user owns
 // @route   POST /api/v1/companies
 export const saveCompany = asyncHandler(async (req, res) => {
   const inputData = req.body;
 
   const userId = req.user._id;
+
+  // --------------------------------------------------------
+  // BASIC VALIDATION
+  // --------------------------------------------------------
 
   if (!inputData.companyName?.trim()) {
     throw new ApiError(400, "Company name is required");
@@ -182,12 +236,20 @@ export const saveCompany = asyncHandler(async (req, res) => {
 
   const normalizedTicker = inputData.ticker.trim().toUpperCase();
 
+  // --------------------------------------------------------
+  // BUSINESS EMAIL VALIDATION
+  // --------------------------------------------------------
+
   if (
     inputData.businessEmail &&
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputData.businessEmail)
   ) {
     throw new ApiError(400, "Invalid business email");
   }
+
+  // --------------------------------------------------------
+  // NUMERIC FIELD VALIDATION
+  // --------------------------------------------------------
 
   const numericFields = [
     "currentRevenue",
@@ -229,65 +291,184 @@ export const saveCompany = asyncHandler(async (req, res) => {
     }
   }
 
+  // --------------------------------------------------------
+  // CHECK WHETHER COMPANY ALREADY EXISTS
+  // --------------------------------------------------------
+
+  const existingCompany = await Company.findOne({
+    ticker: normalizedTicker,
+  });
+
+  // ========================================================
+  // NEW COMPANY
+  // ========================================================
+
+  if (!existingCompany) {
+    const calculated = InvestmentCalcEngine.calculate(inputData);
+
+    const companyData = {
+      ...inputData,
+
+      ticker: normalizedTicker,
+
+      // Never trust client-side calculated values.
+      ...calculated,
+
+      userId,
+
+      updatedAt: new Date(),
+    };
+
+    const company = await Company.create(companyData);
+
+    // ------------------------------------------------------
+    // CREATE OWNER MEMBERSHIP
+    // ------------------------------------------------------
+
+    await CompanyMember.findOneAndUpdate(
+      {
+        companyId: company._id,
+
+        userId,
+      },
+
+      {
+        roleOnCompany: "OWNER",
+
+        status: "ACTIVE",
+
+        invitedBy: userId,
+
+        joinedAt: new Date(),
+      },
+
+      {
+        upsert: true,
+
+        setDefaultsOnInsert: true,
+
+        new: true,
+      },
+    );
+
+    await logActivity(
+      company._id,
+      userId,
+      "COMPANY_CREATED",
+      "WORKFLOW",
+      `Company ${company.companyName} was created.`,
+    );
+
+    return res
+      .status(201)
+      .json(new ApiResponse(201, company, "Company created successfully"));
+  }
+
+  // ========================================================
+  // EXISTING COMPANY
+  // ========================================================
+
+  /**
+   * IMPORTANT SECURITY RULE:
+   *
+   * Knowing a company's ticker is NOT enough
+   * to modify the company.
+   *
+   * The current user must have an ACTIVE
+   * CompanyMember record.
+   */
+
+  const membership = await CompanyMember.findOne({
+    companyId: existingCompany._id,
+
+    userId,
+
+    status: "ACTIVE",
+  });
+
+  if (!membership) {
+    throw new ApiError(403, "You do not have access to modify this company.");
+  }
+
+  const normalizedRole = normalizeRole(membership.roleOnCompany);
+
+  /**
+   * Saving the complete company profile is
+   * an owner/founder-level operation.
+   */
+  if (!isCompanyOwnerOrFounder(normalizedRole)) {
+    throw new ApiError(
+      403,
+      "You do not have permission to modify this company profile.",
+    );
+  }
+
+  // --------------------------------------------------------
+  // RECALCULATE FINANCIAL DATA
+  // --------------------------------------------------------
+
   const calculated = InvestmentCalcEngine.calculate(inputData);
 
+  /**
+   * Do not allow a client to change
+   * ownership fields through this endpoint.
+   */
   const companyData = {
     ...inputData,
 
     ticker: normalizedTicker,
 
-    // Never trust client calculated values.
     ...calculated,
 
-    userId,
+    /**
+     * Existing company ownership remains
+     * unchanged.
+     */
+    userId: existingCompany.userId,
 
     updatedAt: new Date(),
   };
 
-  const company = await Company.findOneAndUpdate(
-    { ticker: normalizedTicker },
+  // --------------------------------------------------------
+  // UPDATE EXISTING COMPANY
+  // --------------------------------------------------------
+
+  const company = await Company.findByIdAndUpdate(
+    existingCompany._id,
+
     companyData,
+
     {
       new: true,
-      upsert: true,
+
       runValidators: true,
+
       setDefaultsOnInsert: true,
     },
   );
 
-  await CompanyMember.findOneAndUpdate(
-    {
-      companyId: company._id,
-
-      userId,
-    },
-
-    {
-      roleOnCompany: "OWNER",
-
-      status: "ACTIVE",
-
-      invitedBy: userId,
-    },
-
-    {
-      upsert: true,
-      setDefaultsOnInsert: true,
-    },
-  );
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
 
   await logActivity(
     company._id,
     userId,
-    "COMPANY_SAVED",
+    "COMPANY_UPDATED",
     "WORKFLOW",
-    `Company ${company.companyName} profile saved and recalculated.`,
+    `Company ${company.companyName} profile was updated and recalculated.`,
   );
 
   return res
     .status(200)
-    .json(new ApiResponse(200, company, "Company profile saved successfully"));
+    .json(
+      new ApiResponse(200, company, "Company profile updated successfully"),
+    );
 });
+
+// ============================================================
+// GET KYC DETAILS
+// ============================================================
 
 // @desc    Get KYC Details
 // @route   GET /api/v1/companies/:ticker/kyc
@@ -322,6 +503,10 @@ export const getKyc = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, kycData, "KYC details fetched successfully"));
 });
+
+// ============================================================
+// UPDATE KYC DETAILS
+// ============================================================
 
 // @desc    Update KYC Details
 // @route   PUT /api/v1/companies/:ticker/kyc
@@ -378,6 +563,10 @@ export const updateKyc = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, company, "KYC details updated successfully"));
 });
 
+// ============================================================
+// GET FUNDING
+// ============================================================
+
 // @desc    Get Funding & Investment Profile
 // @route   GET /api/v1/companies/:ticker/funding
 export const getFunding = asyncHandler(async (req, res) => {
@@ -411,6 +600,10 @@ export const getFunding = asyncHandler(async (req, res) => {
       new ApiResponse(200, funding, "Funding profile retrieved successfully"),
     );
 });
+
+// ============================================================
+// UPDATE FUNDING
+// ============================================================
 
 // @desc    Update Funding & Investment Profile
 // @route   PUT /api/v1/companies/:ticker/funding
@@ -482,6 +675,10 @@ export const updateFunding = asyncHandler(async (req, res) => {
     );
 });
 
+// ============================================================
+// UPDATE SWOT
+// ============================================================
+
 // @desc    Update SWOT Analysis
 // @route   POST /api/v1/companies/:ticker/swot
 export const updateSwot = asyncHandler(async (req, res) => {
@@ -521,6 +718,10 @@ export const updateSwot = asyncHandler(async (req, res) => {
       new ApiResponse(200, company.swot, "SWOT analysis updated successfully"),
     );
 });
+
+// ============================================================
+// UPDATE PESTLE
+// ============================================================
 
 // @desc    Update PESTLE Analysis
 // @route   POST /api/v1/companies/:ticker/pestle
@@ -578,6 +779,10 @@ export const updatePestle = asyncHandler(async (req, res) => {
     );
 });
 
+// ============================================================
+// SUBMIT FOUNDER ASSESSMENT
+// ============================================================
+
 // @desc    Submit / Calculate Founder Assessment
 // @route   POST /api/v1/companies/:ticker/assessment
 export const submitAssessment = asyncHandler(async (req, res) => {
@@ -592,6 +797,7 @@ export const submitAssessment = asyncHandler(async (req, res) => {
   if (
     !answers ||
     typeof answers !== "object" ||
+    Array.isArray(answers) ||
     Object.keys(answers).length === 0
   ) {
     throw new ApiError(400, "Assessment answers are required");
@@ -681,6 +887,10 @@ export const submitAssessment = asyncHandler(async (req, res) => {
     );
 });
 
+// ============================================================
+// GET TEAM MEMBERS
+// ============================================================
+
 // @desc    Get Team Members for Company
 // @route   GET /api/v1/companies/:ticker/members
 export const getTeamMembers = asyncHandler(async (req, res) => {
@@ -700,6 +910,10 @@ export const getTeamMembers = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, members, "Team members retrieved successfully"));
 });
+
+// ============================================================
+// ADD / INVITE TEAM MEMBER
+// ============================================================
 
 // @desc    Add / Invite Team Member
 // @route   POST /api/v1/companies/:ticker/members
@@ -736,8 +950,8 @@ export const addTeamMember = asyncHandler(async (req, res) => {
   }
 
   /**
-   * Do not allow the requester to create
-   * another OWNER through the invitation API.
+   * OWNER must never be assigned
+   * through the normal invitation API.
    */
   if (normalizedRole === "OWNER") {
     throw new ApiError(
@@ -746,22 +960,11 @@ export const addTeamMember = asyncHandler(async (req, res) => {
     );
   }
 
-  let user = await User.findOne({
+  const user = await User.findOne({
     email: normalizedEmail,
   });
 
   if (!user) {
-    /**
-     * IMPORTANT:
-     *
-     * We should not create a fake user with a
-     * hardcoded password.
-     *
-     * Instead create an invitation/pending account
-     * flow later.
-     *
-     * For now, require the user to already exist.
-     */
     throw new ApiError(
       404,
       "No user exists with this email. Ask the user to register first.",
@@ -781,6 +984,8 @@ export const addTeamMember = asyncHandler(async (req, res) => {
       status: "ACTIVE",
 
       invitedBy: req.user._id,
+
+      joinedAt: new Date(),
     },
 
     {
@@ -805,6 +1010,10 @@ export const addTeamMember = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, member, "Team member added successfully"));
 });
 
+// ============================================================
+// GET TIMELINE
+// ============================================================
+
 // @desc    Get Timeline Activity Logs
 // @route   GET /api/v1/companies/:ticker/timeline
 export const getTimeline = asyncHandler(async (req, res) => {
@@ -827,6 +1036,10 @@ export const getTimeline = asyncHandler(async (req, res) => {
     );
 });
 
+// ============================================================
+// DELETE COMPANY
+// ============================================================
+
 // @desc    Delete company by ticker
 // @route   DELETE /api/v1/companies/:ticker
 export const deleteCompany = asyncHandler(async (req, res) => {
@@ -834,6 +1047,33 @@ export const deleteCompany = asyncHandler(async (req, res) => {
 
   if (!company) {
     throw new ApiError(404, "Company not found");
+  }
+
+  // --------------------------------------------------------
+  // Verify current user's membership
+  // --------------------------------------------------------
+
+  const membership = await CompanyMember.findOne({
+    companyId: company._id,
+
+    userId: req.user._id,
+
+    status: "ACTIVE",
+  });
+
+  if (!membership) {
+    throw new ApiError(403, "You do not have access to this company.");
+  }
+
+  // --------------------------------------------------------
+  // Only OWNER / FOUNDER can delete company
+  // --------------------------------------------------------
+
+  if (!isCompanyOwnerOrFounder(membership.roleOnCompany)) {
+    throw new ApiError(
+      403,
+      "Only the company owner or founder can delete the company.",
+    );
   }
 
   const ticker = company.ticker;
@@ -853,6 +1093,12 @@ export const deleteCompany = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, `Company ${ticker} deleted successfully`));
 });
 
+// ============================================================
+// UPDATE TEAM ROSTER
+// ============================================================
+
+// @desc    Update company founder and team roster
+// @route   PUT /api/v1/companies/:ticker/team
 export const updateTeamRoster = asyncHandler(async (req, res) => {
   const company = req.company;
 
@@ -872,7 +1118,13 @@ export const updateTeamRoster = asyncHandler(async (req, res) => {
 
   company.coFounderNames = Array.isArray(coFounderNames) ? coFounderNames : [];
 
-  company.headcount = Number(headcount || 0);
+  const numericHeadcount = Number(headcount || 0);
+
+  if (!Number.isFinite(numericHeadcount) || numericHeadcount < 0) {
+    throw new ApiError(400, "Headcount must be a valid non-negative number");
+  }
+
+  company.headcount = numericHeadcount;
 
   company.businessExperience = businessExperience || "";
 
