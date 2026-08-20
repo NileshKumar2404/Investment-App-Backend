@@ -5,8 +5,7 @@ import Session from "../models/session.js";
 
 import { ApiError } from "../utils/ApiError.js";
 
-const JWT_SECRET =
-  process.env.JWT_SECRET || "investment_os_super_secret_jwt_key_2026";
+const JWT_SECRET = process.env.JWT_SECRET || "investment_os_super_secret_jwt_key_2026";
 
 /**
  * Protect a route with authentication.
@@ -39,7 +38,7 @@ export const protect = async (req, res, next) => {
     const authorization = req.headers.authorization;
 
     // =====================================================
-    // 1. CHECK AUTHORIZATION HEADER
+    // 1. AUTHORIZATION HEADER
     // =====================================================
 
     if (!authorization || !authorization.startsWith("Bearer ")) {
@@ -53,7 +52,7 @@ export const protect = async (req, res, next) => {
     }
 
     // =====================================================
-    // 2. VERIFY ACCESS TOKEN
+    // 2. VERIFY JWT
     // =====================================================
 
     let decoded;
@@ -62,24 +61,24 @@ export const protect = async (req, res, next) => {
       decoded = jwt.verify(token, JWT_SECRET);
     } catch (error) {
       return next(
-        new ApiError(401, "Not authorized, token invalid or expired"),
+        new ApiError(401, "Not authorized, token invalid or expired."),
       );
     }
 
     // =====================================================
-    // 3. VERIFY TOKEN TYPE
+    // 3. VERIFY ACCESS TOKEN
     // =====================================================
 
     if (!decoded || decoded.type !== "access") {
-      return next(new ApiError(401, "Invalid access token"));
+      return next(new ApiError(401, "Invalid access token."));
     }
 
     if (!decoded.id) {
-      return next(new ApiError(401, "Invalid access token"));
+      return next(new ApiError(401, "Invalid access token."));
     }
 
     if (!decoded.sessionId) {
-      return next(new ApiError(401, "Invalid session"));
+      return next(new ApiError(401, "Invalid session."));
     }
 
     // =====================================================
@@ -93,7 +92,7 @@ export const protect = async (req, res, next) => {
     }
 
     // =====================================================
-    // 5. CHECK SESSION REVOCATION
+    // 5. SESSION REVOCATION
     // =====================================================
 
     if (session.revokedAt) {
@@ -103,7 +102,7 @@ export const protect = async (req, res, next) => {
     }
 
     // =====================================================
-    // 6. CHECK SESSION EXPIRATION
+    // 6. SESSION EXPIRATION
     // =====================================================
 
     if (!session.expiresAt || session.expiresAt <= new Date()) {
@@ -113,11 +112,11 @@ export const protect = async (req, res, next) => {
     }
 
     // =====================================================
-    // 7. VERIFY SESSION BELONGS TO USER IN TOKEN
+    // 7. SESSION USER MATCH
     // =====================================================
 
     if (session.userId.toString() !== decoded.id.toString()) {
-      return next(new ApiError(401, "Invalid session"));
+      return next(new ApiError(401, "Invalid session."));
     }
 
     // =====================================================
@@ -127,11 +126,11 @@ export const protect = async (req, res, next) => {
     const user = await User.findById(decoded.id);
 
     if (!user) {
-      return next(new ApiError(401, "User account no longer exists"));
+      return next(new ApiError(401, "User account no longer exists."));
     }
 
     // =====================================================
-    // 9. CHECK ACCOUNT STATUS
+    // 9. ACCOUNT STATUS
     // =====================================================
 
     if (user.accountStatus !== "Active") {
@@ -144,49 +143,50 @@ export const protect = async (req, res, next) => {
     }
 
     // =====================================================
-    // 10. ATTACH AUTHENTICATED USER
+    // 10. UPDATE SESSION ACTIVITY
+    // =====================================================
+
+    const FIVE_MINUTES = 5 * 60 * 1000;
+
+    if (
+      !session.lastUsedAt ||
+      Date.now() - new Date(session.lastUsedAt).getTime() > FIVE_MINUTES
+    ) {
+      session.lastUsedAt = new Date();
+
+      await session.save();
+    }
+
+    // =====================================================
+    // 11. ATTACH AUTH
     // =====================================================
 
     req.user = user;
 
-    /**
-     * Session ID is needed by:
-     *
-     * - logout
-     * - session management
-     * - audit logging
-     */
     req.sessionId = session._id.toString();
 
-    /**
-     * Keep useful authentication information
-     * available to controllers when required.
-     */
+    req.session = session;
+
     req.auth = {
       userId: user._id.toString(),
+
       sessionId: session._id.toString(),
+
       role: user.role,
     };
 
     return next();
   } catch (error) {
-    return next(new ApiError(401, "Authentication failed"));
+    console.error("Authentication middleware error:", error);
+
+    return next(new ApiError(401, "Authentication failed."));
   }
 };
 
-/**
- * Require an authenticated user.
- *
- * `protect` already performs authentication,
- * but keeping this middleware is useful for
- * existing routes that currently use:
- *
- * protect
- * requireAuth
- *
- * It also keeps backward compatibility with
- * the existing project.
- */
+// =========================================================
+// REQUIRE AUTH
+// =========================================================
+
 export const requireAuth = (req, res, next) => {
   if (!req.user) {
     return next(new ApiError(401, "Authentication required. Please login."));
@@ -195,23 +195,25 @@ export const requireAuth = (req, res, next) => {
   return next();
 };
 
-/**
- * Require one of the specified global user roles.
- *
- * Example:
- *
- * authorizeRoles('admin', 'super_admin')
- *
- * This should be used for platform-level
- * administrative operations.
- */
+// =========================================================
+// AUTHORIZE ROLES
+// =========================================================
+
 export const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
       return next(new ApiError(401, "Authentication required. Please login."));
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRole = String(req.user.role || "")
+      .trim()
+      .toLowerCase();
+
+    const normalizedAllowedRoles = allowedRoles.map((role) =>
+      String(role).trim().toLowerCase(),
+    );
+
+    if (!normalizedAllowedRoles.includes(userRole)) {
       return next(
         new ApiError(403, "You do not have permission to perform this action."),
       );
