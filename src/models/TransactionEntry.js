@@ -12,6 +12,7 @@ const transactionEntrySchema = new mongoose.Schema(
       type: String,
       enum: ['Revenue', 'Expense'],
       required: true,
+      index: true
     },
     category: {
       type: String,
@@ -21,10 +22,15 @@ const transactionEntrySchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
+      min: [
+        0.01,
+        'Amount must be greater than 0.'
+      ]
     },
     date: {
       type: Date,
       default: Date.now,
+      index: true
     },
     periodicity: {
       type: String,
@@ -39,9 +45,26 @@ const transactionEntrySchema = new mongoose.Schema(
     notes: {
       type: String,
       default: '',
+      trim: true
     },
   },
   { timestamps: true }
 );
+
+transactionEntrySchema.index({
+  companyId: 1,
+  date: -1
+})
+
+transactionEntrySchema.index({
+  companyId: 1,
+  type: 1,
+  date: -1
+})
+
+transactionEntrySchema.index({
+  companyId: 1,
+  category: 1
+})
 
 export default mongoose.model('TransactionEntry', transactionEntrySchema);

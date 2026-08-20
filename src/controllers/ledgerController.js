@@ -6,6 +6,13 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 
+const ALLOWED_TRANSACTION_TYPES = ["Revenue", "Expense"];
+
+const ALLOWED_PERIODICITIES = ["One-time", "Monthly", "Quarterly", "Yearly"];
+
+const ALLOWED_EXPENSE_TYPES = ["Fixed", "Variable", "Recurring"];
+
+const ROLES_ALLOWED_TO_DELETE = ["OWNER", "FOUNDER"];
 // ============================================================
 // ACTIVITY LOGGER
 // ============================================================
@@ -31,24 +38,190 @@ const logActivity = async (
 };
 
 // ============================================================
+// COMPANY VALIDATION HELPER
+// ============================================================
+
+const getCompanyFromRequest = (req) => {
+  const company = req.company;
+
+  if (!company) {
+    throw new ApiError(404, "Company not found.");
+  }
+
+  return company;
+};
+
+// ============================================================
+// NORMALIZE TRANSACTION TYPE
+// ============================================================
+
+const normalizeTransactionType = (type) => {
+  const normalized = String(type || "")
+    .trim()
+    .toLowerCase();
+
+  if (normalized === "revenue") {
+    return "Revenue";
+  }
+
+  if (normalized === "expense") {
+    return "Expense";
+  }
+
+  return null;
+};
+
+// ============================================================
+// NORMALIZE PERIODICITY
+// ============================================================
+
+const normalizePeriodicity = (periodicity) => {
+  if (
+    periodicity === undefined ||
+    periodicity === null ||
+    String(periodicity).trim() === ""
+  ) {
+    return "One-time";
+  }
+
+  return String(periodicity).trim();
+};
+
+// ============================================================
+// NORMALIZE EXPENSE TYPE
+// ============================================================
+
+const normalizeExpenseType = (expenseType) => {
+  if (
+    expenseType === undefined ||
+    expenseType === null ||
+    String(expenseType).trim() === ""
+  ) {
+    return "Variable";
+  }
+
+  return String(expenseType).trim();
+};
+
+// ============================================================
+// VALIDATE TRANSACTION DATE
+// ============================================================
+
+const normalizeTransactionDate = (date) => {
+  if (!date) {
+    return new Date();
+  }
+
+  const transactionDate = new Date(date);
+
+  if (Number.isNaN(transactionDate.getTime())) {
+    throw new ApiError(400, "Invalid transaction date.");
+  }
+
+  return transactionDate;
+};
+
+// ============================================================
+// VALIDATE TRANSACTION INPUT
+// ============================================================
+
+const validateTransactionInput = ({
+  type,
+  category,
+  amount,
+  date,
+  periodicity,
+  expenseType,
+}) => {
+  // ----------------------------------------------------------
+  // Required fields
+  // ----------------------------------------------------------
+
+  if (!type || !category || amount === undefined || amount === null) {
+    throw new ApiError(
+      400,
+      "Transaction type, category, and amount are required.",
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Type
+  // ----------------------------------------------------------
+
+  const normalizedType = normalizeTransactionType(type);
+
+  if (!normalizedType) {
+    throw new ApiError(400, "Transaction type must be Revenue or Expense.");
+  }
+
+  // ----------------------------------------------------------
+  // Category
+  // ----------------------------------------------------------
+
+  const normalizedCategory = String(category).trim();
+
+  if (!normalizedCategory) {
+    throw new ApiError(400, "Transaction category cannot be empty.");
+  }
+
+  // ----------------------------------------------------------
+  // Amount
+  // ----------------------------------------------------------
+
+  const numericAmount = Number(amount);
+
+  if (!Number.isFinite(numericAmount)) {
+    throw new ApiError(400, "Transaction amount must be a valid number.");
+  }
+
+  if (numericAmount <= 0) {
+    throw new ApiError(400, "Transaction amount must be greater than 0.");
+  }
+
+  // ----------------------------------------------------------
+  // Periodicity
+  // ----------------------------------------------------------
+
+  const normalizedPeriodicity = normalizePeriodicity(periodicity);
+
+  if (!ALLOWED_PERIODICITIES.includes(normalizedPeriodicity)) {
+    throw new ApiError(400, "Invalid transaction periodicity.");
+  }
+
+  // ----------------------------------------------------------
+  // Expense type
+  // ----------------------------------------------------------
+
+  const normalizedExpenseType = normalizeExpenseType(expenseType);
+
+  if (!ALLOWED_EXPENSE_TYPES.includes(normalizedExpenseType)) {
+    throw new ApiError(400, "Invalid expense type.");
+  }
+
+  // ----------------------------------------------------------
+  // Date
+  // ----------------------------------------------------------
+
+  const transactionDate = normalizeTransactionDate(date);
+
+  return {
+    normalizedType,
+    normalizedCategory,
+    numericAmount,
+    normalizedPeriodicity,
+    normalizedExpenseType,
+    transactionDate,
+  };
+};
+
+// ============================================================
 // GET TRANSACTIONS
 // ============================================================
 
 // @desc    Get all transactions for a company
 // @route   GET /api/v1/ledger/:ticker
 export const getTransactions = asyncHandler(async (req, res) => {
-  /**
-   * companyAuthorization middleware has already:
-   *
-   * 1. Found the company
-   * 2. Verified the user is an ACTIVE member
-   * 3. Attached the company to req.company
-   */
-  const company = req.company;
-
-  if (!company) {
-    throw new ApiError(404, "Company not found");
-  }
+  const company = getCompanyFromRequest(req);
 
   const transactions = await TransactionEntry.find({
     companyId: company._id,
@@ -63,7 +236,7 @@ export const getTransactions = asyncHandler(async (req, res) => {
       new ApiResponse(
         200,
         transactions,
-        "Ledger transactions retrieved successfully",
+        "Ledger transactions retrieved successfully.",
       ),
     );
 });
@@ -75,110 +248,30 @@ export const getTransactions = asyncHandler(async (req, res) => {
 // @desc    Add new revenue or expense transaction entry
 // @route   POST /api/v1/ledger/:ticker
 export const addTransaction = asyncHandler(async (req, res) => {
-  const company = req.company;
-
-  if (!company) {
-    throw new ApiError(404, "Company not found");
-  }
+  const company = getCompanyFromRequest(req);
 
   const { type, category, amount, date, periodicity, expenseType, notes } =
     req.body;
 
   // --------------------------------------------------------
-  // Required fields
+  // Validate input
   // --------------------------------------------------------
 
-  if (!type || !category || amount === undefined || amount === null) {
-    throw new ApiError(
-      400,
-      "Transaction type, category, and amount are required",
-    );
-  }
-
-  // --------------------------------------------------------
-  // Normalize string inputs
-  // --------------------------------------------------------
-
-  const normalizedType =
-    String(type).trim().toLowerCase() === "revenue"
-      ? "Revenue"
-      : String(type).trim().toLowerCase() === "expense"
-        ? "Expense"
-        : null;
-
-  // --------------------------------------------------------
-  // Validate transaction type
-  // --------------------------------------------------------
-
-  if (!normalizedType) {
-    throw new ApiError(400, "Transaction type must be Revenue or Expense");
-  }
-
-  // --------------------------------------------------------
-  // Validate category
-  // --------------------------------------------------------
-
-  const normalizedCategory = String(category).trim();
-
-  if (!normalizedCategory) {
-    throw new ApiError(400, "Transaction category cannot be empty");
-  }
-
-  // --------------------------------------------------------
-  // Validate amount
-  // --------------------------------------------------------
-
-  const numericAmount = Number(amount);
-
-  if (!Number.isFinite(numericAmount)) {
-    throw new ApiError(400, "Transaction amount must be a valid number");
-  }
-
-  if (numericAmount < 0) {
-    throw new ApiError(400, "Transaction amount cannot be negative");
-  }
-
-  // --------------------------------------------------------
-  // Validate periodicity
-  // --------------------------------------------------------
-
-  const allowedPeriodicities = ["One-time", "Monthly", "Quarterly", "Yearly"];
-
-  const normalizedPeriodicity = periodicity
-    ? String(periodicity).trim()
-    : "One-time";
-
-  if (!allowedPeriodicities.includes(normalizedPeriodicity)) {
-    throw new ApiError(400, "Invalid transaction periodicity");
-  }
-
-  // --------------------------------------------------------
-  // Validate expense type
-  // --------------------------------------------------------
-
-  const allowedExpenseTypes = ["Fixed", "Variable", "Recurring"];
-
-  const normalizedExpenseType = expenseType
-    ? String(expenseType).trim()
-    : "Variable";
-
-  if (!allowedExpenseTypes.includes(normalizedExpenseType)) {
-    throw new ApiError(400, "Invalid expense type");
-  }
-
-  // --------------------------------------------------------
-  // Validate date
-  // --------------------------------------------------------
-
-  let transactionDate = new Date();
-
-  if (date) {
-    transactionDate = new Date(date);
-
-    if (Number.isNaN(transactionDate.getTime())) {
-      throw new ApiError(400, "Invalid transaction date");
-    }
-  }
+  const {
+    normalizedType,
+    normalizedCategory,
+    numericAmount,
+    normalizedPeriodicity,
+    normalizedExpenseType,
+    transactionDate,
+  } = validateTransactionInput({
+    type,
+    category,
+    amount,
+    date,
+    periodicity,
+    expenseType,
+  });
 
   // --------------------------------------------------------
   // Create transaction
@@ -217,7 +310,7 @@ export const addTransaction = asyncHandler(async (req, res) => {
   return res
     .status(201)
     .json(
-      new ApiResponse(201, entry, "Transaction added to ledger successfully"),
+      new ApiResponse(201, entry, "Transaction added to ledger successfully."),
     );
 });
 
@@ -231,11 +324,11 @@ export const deleteTransaction = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   // --------------------------------------------------------
-  // Validate transaction ID
+  // Validate ID
   // --------------------------------------------------------
 
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-    throw new ApiError(400, "Invalid transaction ID");
+    throw new ApiError(400, "Invalid transaction ID.");
   }
 
   // --------------------------------------------------------
@@ -245,11 +338,11 @@ export const deleteTransaction = asyncHandler(async (req, res) => {
   const entry = await TransactionEntry.findById(id);
 
   if (!entry) {
-    throw new ApiError(404, "Transaction entry not found");
+    throw new ApiError(404, "Transaction entry not found.");
   }
 
   // --------------------------------------------------------
-  // Verify active company membership
+  // Verify active membership
   // --------------------------------------------------------
 
   const membership = await CompanyMember.findOne({
@@ -265,14 +358,14 @@ export const deleteTransaction = asyncHandler(async (req, res) => {
   }
 
   // --------------------------------------------------------
-  // Check delete permission
+  // Verify delete permission
   // --------------------------------------------------------
 
-  const role = String(membership.roleOnCompany).trim().toUpperCase();
+  const role = String(membership.roleOnCompany || "")
+    .trim()
+    .toUpperCase();
 
-  const rolesAllowedToDelete = ["OWNER", "FOUNDER"];
-
-  if (!rolesAllowedToDelete.includes(role)) {
+  if (!ROLES_ALLOWED_TO_DELETE.includes(role)) {
     throw new ApiError(
       403,
       "You do not have permission to delete ledger transactions.",
@@ -280,7 +373,7 @@ export const deleteTransaction = asyncHandler(async (req, res) => {
   }
 
   // --------------------------------------------------------
-  // Delete transaction
+  // Delete
   // --------------------------------------------------------
 
   await TransactionEntry.findByIdAndDelete(entry._id);
@@ -299,5 +392,5 @@ export const deleteTransaction = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, null, "Transaction deleted successfully"));
+    .json(new ApiResponse(200, null, "Transaction deleted successfully."));
 });
