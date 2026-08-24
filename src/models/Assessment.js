@@ -1,16 +1,23 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
+
+const scoreField = {
+  type: Number,
+  default: 0,
+  min: 0,
+  max: 100,
+};
 
 const assessmentSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: "User",
       required: true,
       index: true,
     },
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
+      ref: "Company",
       required: true,
       index: true,
     },
@@ -23,36 +30,71 @@ const assessmentSchema = new mongoose.Schema(
     archetype: {
       type: String,
       required: true,
-      default: 'Strategic Visionary',
+      trim: true,
+      default: "Strategic Visionary",
     },
     domainScores: {
-      strategy: { type: Number, default: 0 },
-      operations: { type: Number, default: 0 },
-      finance: { type: Number, default: 0 },
-      leadership: { type: Number, default: 0 },
-      marketing: { type: Number, default: 0 },
+      strategy: scoreField,
+      operations: scoreField,
+      finance: scoreField,
+      leadership: scoreField,
+      marketing: scoreField,
     },
     subskillScores: {
       type: Map,
-      of: Number,
+      of: {
+        type: Number,
+        min: 0,
+        max: 100,
+      },
+      default: {},
     },
     answers: {
       type: Map,
       of: String,
+      default: {},
     },
     reviewStatus: {
       type: String,
-      enum: ['PENDING', 'IN_REVIEW', 'APPROVED', 'REQUIRES_FOLLOW_UP', 'REJECTED'],
-      default: 'PENDING',
+      enum: [
+        "PENDING",
+        "IN_REVIEW",
+        "APPROVED",
+        "REQUIRES_FOLLOW_UP",
+        "REJECTED",
+      ],
+      default: "PENDING",
+      index: true,
     },
-    reviewNotes: { type: String, default: '' },
+    reviewNotes: { type: String, trim: true, default: "" },
     reviewedByUserId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: "User",
+      default: null,
     },
-    reviewedAt: { type: Date },
+    reviewedAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-export default mongoose.model('Assessment', assessmentSchema);
+assessmentSchema.index({
+  companyId: 1,
+  createdAt: -1,
+});
+
+// Find assessments belonging to a particular user
+// inside a company.
+assessmentSchema.index({
+  companyId: 1,
+  userId: 1,
+  createdAt: -1,
+});
+
+// Useful for admin/reviewer dashboards.
+assessmentSchema.index({
+  companyId: 1,
+  reviewStatus: 1,
+  createdAt: -1,
+});
+
+export default mongoose.model("Assessment", assessmentSchema);
