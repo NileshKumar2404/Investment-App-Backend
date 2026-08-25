@@ -22,6 +22,16 @@ jobs:
     name: Validate backend
     runs-on: ubuntu-latest
 
+    env:
+      NODE_ENV: test
+      MONGO_URI: mongodb://127.0.0.1:27017/investment_os_ci
+      JWT_SECRET: ci-only-investment-backend-test-secret
+      JWT_EXPIRES_IN: 15m
+      REFRESH_TOKEN_EXPIRES_DAYS: 1
+      FRONTEND_URL: http://localhost:3000
+      AUTH_RATE_LIMIT: 1000
+      API_RATE_LIMIT: 1000
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,6 +41,21 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Start MongoDB for integration tests
+        run: |
+          docker run -d --name investment-mongodb-ci -p 27017:27017 mongo:8.0
+          echo "Waiting for MongoDB..."
+          for attempt in {1..30}; do
+            if docker exec investment-mongodb-ci mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '^1$'; then
+              echo "MongoDB is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MongoDB did not become ready in time. Container logs:"
+          docker logs investment-mongodb-ci
+          exit 1
 
       - name: Install dependencies
         run: npm ci
@@ -43,3 +68,11 @@ jobs:
 
       - name: Check production dependency vulnerabilities
         run: npm audit --omit=dev --audit-level=high
+
+      - name: Show MongoDB logs on failure
+        if: failure()
+        run: docker logs investment-mongodb-ci || true
+
+      - name: Stop MongoDB
+        if: always()
+        run: docker rm -f investment-mongodb-ci || true
