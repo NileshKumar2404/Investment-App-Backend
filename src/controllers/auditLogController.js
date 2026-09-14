@@ -165,24 +165,46 @@ export const createAuditLog = async ({
   requestId = null,
 }) => {
   if (!action || !resourceType) {
-    throw new ApiError(400, "Audit log action and resourceType are required");
+    console.error(
+      "[AUDIT LOG] Missing required action or resourceType",
+      {
+        action,
+        resourceType,
+      },
+    );
+
+    return null;
   }
 
-  return AuditLog.create({
-    actorUserId,
-    action,
-    resourceType,
-    resourceId,
-    companyId,
-    targetUserId,
-    success,
-    statusCode,
-    message,
-    metadata,
-    ipAddress,
-    userAgent,
-    requestId,
-  });
+  try {
+    return await AuditLog.create({
+      actorUserId,
+      action,
+      resourceType,
+      resourceId,
+      companyId,
+      targetUserId,
+      success,
+      statusCode,
+      message,
+      metadata,
+      ipAddress,
+      userAgent,
+      requestId,
+    });
+  } catch (error) {
+    console.error("[AUDIT LOG] Failed to create audit log:", {
+      message: error.message,
+      name: error.name,
+      action,
+      resourceType,
+      resourceId,
+      actorUserId,
+      targetUserId,
+    });
+
+    return null;
+  }
 };
 
 export const createAuditLogFromRequest = async ({

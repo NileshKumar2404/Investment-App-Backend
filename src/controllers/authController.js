@@ -8,6 +8,8 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 
+import { createAuditLogFromRequest } from "./auditLogController.js";
+
 const JWT_SECRET =
   process.env.JWT_SECRET || "investment_os_super_secret_jwt_key_2026";
 
@@ -213,6 +215,21 @@ export const registerUser = asyncHandler(async (req, res) => {
     req,
   });
 
+  await createAuditLogFromRequest({
+    req,
+    action: "REGISTER",
+    resourceType: "USER",
+    resourceId: user._id,
+    targetUserId: user._id,
+    success: true,
+    statusCode: 201,
+    message: "User registered successfully",
+    metadata: {
+      email: user.email,
+      role: user.role,
+    },
+  });
+
   // --------------------------------------------------------
   // RESPONSE
   // --------------------------------------------------------
@@ -306,6 +323,22 @@ export const loginUser = asyncHandler(async (req, res) => {
     req,
   });
 
+  await createAuditLogFromRequest({
+    req,
+    action: "LOGIN",
+    resourceType: "SESSION",
+    resourceId: session._id,
+    targetUserId: user._id,
+    success: true,
+    statusCode: 200,
+    message: "User logged in successfully",
+    metadata: {
+      sessionId: session._id,
+      deviceId: req.headers["x-device-id"] || null,
+      deviceName: req.headers["x-device-name"] || null,
+    },
+  });
+
   // --------------------------------------------------------
   // RESPONSE
   // --------------------------------------------------------
@@ -391,6 +424,17 @@ export const logoutUser = asyncHandler(async (req, res) => {
     );
   }
 
+  await createAuditLogFromRequest({
+    req,
+    action: "LOGOUT",
+    resourceType: "SESSION",
+    resourceId: req.sessionId || null,
+    targetUserId: req.user._id,
+    success: true,
+    statusCode: 200,
+    message: "User logged out successfully",
+  });
+
   return res
     .status(200)
     .json(new ApiResponse(200, null, "Logged out successfully."));
@@ -420,6 +464,16 @@ export const logoutAllDevices = asyncHandler(async (req, res) => {
       },
     },
   );
+
+  await createAuditLogFromRequest({
+    req,
+    action: "LOGOUT_ALL",
+    resourceType: "SESSION",
+    targetUserId: req.user._id,
+    success: true,
+    statusCode: 200,
+    message: "All active sessions were logged out",
+  });
 
   return res
     .status(200)
@@ -493,6 +547,20 @@ export const revokeSession = asyncHandler(async (req, res) => {
 
   await session.save();
 
+  await createAuditLogFromRequest({
+    req,
+    action: "REVOKE_SESSION",
+    resourceType: "SESSION",
+    resourceId: session._id,
+    targetUserId: req.user._id,
+    success: true,
+    statusCode: 200,
+    message: "Session revoked successfully",
+    metadata: {
+      revokedReason: "USER_REVOKED",
+    },
+  });
+
   return res
     .status(200)
     .json(new ApiResponse(200, null, "Session revoked successfully."));
@@ -556,6 +624,17 @@ export const changePassword = asyncHandler(async (req, res) => {
       },
     },
   );
+
+  await createAuditLogFromRequest({
+    req,
+    action: "CHANGE_PASSWORD",
+    resourceType: "USER",
+    resourceId: user._id,
+    targetUserId: user._id,
+    success: true,
+    statusCode: 200,
+    message: "User password changed successfully",
+  });
 
   return res
     .status(200)
@@ -710,6 +789,17 @@ export const resetPassword = asyncHandler(async (req, res) => {
       },
     },
   );
+
+  await createAuditLogFromRequest({
+    req,
+    action: "RESET_PASSWORD",
+    resourceType: "USER",
+    resourceId: user._id,
+    targetUserId: user._id,
+    success: true,
+    statusCode: 200,
+    message: "User password reset successfully",
+  });
 
   return res
     .status(200)
