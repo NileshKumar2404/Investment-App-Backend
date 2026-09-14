@@ -48,7 +48,6 @@ const sessionSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
 
     revokedAt: {
@@ -62,7 +61,8 @@ const sessionSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
-  }, { timestamps: true, },
+  },
+  { timestamps: true },
 );
 
 sessionSchema.index({
