@@ -2,80 +2,75 @@ import mongoose from "mongoose";
 
 const auditLogSchema = new mongoose.Schema(
   {
-    actorId: {
+    actorUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      default: null,
+      required: false,
       index: true,
     },
-
     action: {
       type: String,
       required: true,
       trim: true,
-      index: true,
+      uppercase: true,
+      maxlength: 100,
     },
-
-    category: {
-      type: String,
-
-      enum: [
-        "AUTH",
-        "SECURITY",
-        "USER",
-        "COMPANY",
-        "DOCUMENT",
-        "INVESTMENT",
-        "WATCHLIST",
-        "REPORT",
-        "NOTIFICATION",
-        "ADMIN",
-        "SYSTEM",
-      ],
-
-      default: "SYSTEM",
-      index: true,
-    },
-
     resourceType: {
       type: String,
-      default: "",
+      required: true,
       trim: true,
+      maxlength: 100,
     },
-
     resourceId: {
       type: mongoose.Schema.Types.ObjectId,
-      default: null,
+      required: false,
       index: true,
     },
-
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
-      default: null,
+      required: false,
       index: true,
     },
-
-    ipAddress: {
-      type: String,
-      default: "",
-      trim: true,
+    targetUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
     },
-
-    userAgent: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
     success: {
       type: Boolean,
       default: true,
+      index: true,
     },
-
+    statusCode: {
+      type: Number,
+      min: 100,
+      max: 599,
+    },
+    message: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+    },
     metadata: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
+    },
+    ipAddress: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+    },
+    userAgent: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+    },
+    requestId: {
+      type: String,
+      trim: true,
+      maxlength: 200,
+      index: true,
     },
   },
   {
@@ -83,19 +78,19 @@ const auditLogSchema = new mongoose.Schema(
   },
 );
 
-auditLogSchema.index({
-  actorId: 1,
-  createdAt: -1,
+auditLogSchema.index({ createdAt: -1 });
+auditLogSchema.index({ actorUserId: 1, createdAt: -1 });
+auditLogSchema.index({ companyId: 1, createdAt: -1 });
+auditLogSchema.index({ action: 1, createdAt: -1 });
+
+auditLogSchema.pre("save", function (next) {
+  if (this.metadata === undefined || this.metadata === null) {
+    this.metadata = {};
+  }
+
+  next();
 });
 
-auditLogSchema.index({
-  companyId: 1,
-  createdAt: -1,
-});
+const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 
-auditLogSchema.index({
-  action: 1,
-  createdAt: -1,
-});
-
-export default mongoose.model("AuditLog", auditLogSchema);
+export default AuditLog;
