@@ -12,6 +12,7 @@ import watchlistRoutes from './routes/watchlistRoutes.js'
 import reportRoutes from './routes/reportRoutes.js'
 import notificationRoutes from './routes/notificationRoutes.js'
 import auditLogRoutes from './routes/auditLogRoutes.js'
+import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
@@ -144,6 +145,10 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Centralized audit logging for state-changing requests across modules.
+// Authentication events continue to use explicit auth-controller audit entries.
+app.use(auditRequestMiddleware);
 
 app.use("/api/v1/auth", authLimiter, authRoutes);
 app.use("/api/v1/companies", companyRoutes);
