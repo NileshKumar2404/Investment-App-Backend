@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 
 import AuditLog from "../models/AuditLog.js";
-import User from "../models/User.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
@@ -169,7 +168,7 @@ export const createAuditLog = async ({
     throw new ApiError(400, "Audit log action and resourceType are required");
   }
 
-  const auditLog = await AuditLog.create({
+  return AuditLog.create({
     actorUserId,
     action,
     resourceType,
@@ -184,8 +183,6 @@ export const createAuditLog = async ({
     userAgent,
     requestId,
   });
-
-  return auditLog;
 };
 
 export const createAuditLogFromRequest = async ({
