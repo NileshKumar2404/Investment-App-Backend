@@ -33,7 +33,12 @@ export const auditRequestMiddleware = (req, res, next) => {
     return next();
   }
 
-  if (req.originalUrl.startsWith("/api/v1/audit-logs")) {
+  // Authentication already has explicit, security-focused audit events
+  // in authController. Do not create generic duplicate auth entries.
+  if (
+    req.originalUrl.startsWith("/api/v1/auth") ||
+    req.originalUrl.startsWith("/api/v1/audit-logs")
+  ) {
     return next();
   }
 
