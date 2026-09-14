@@ -10,6 +10,7 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import investmentRoutes from './routes/investmentRoutes.js'
 import watchlistRoutes from './routes/watchlistRoutes.js'
 import reportRoutes from './routes/reportRoutes.js'
+import notificationRoutes from './routes/notificationRoutes.js'
 
 import { ApiError } from "./utils/ApiError.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
@@ -220,6 +221,12 @@ app.use("/api/v1/watchlists", watchlistRoutes);
 // ============================================================
 
 app.use("/api/v1/reports", reportRoutes);
+
+// ============================================================
+// NOTIFICATION ROUTES
+// ============================================================
+
+app.use("/api/v1/notifications", notificationRoutes);
 
 // ============================================================
 // 404 HANDLER
