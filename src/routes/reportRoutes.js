@@ -10,18 +10,7 @@ import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.get(
-    "/:ticker",
-    protect,
-    getCompanyReports,
-);
-
-router.post(
-    "/:ticker",
-    protect,
-    createReport,
-);
-
+// Specific report routes must come before /:ticker.
 router.get(
     "/report/:id",
     protect,
@@ -40,5 +29,16 @@ router.delete(
     deleteReport,
 );
 
+router.get(
+    "/:ticker",
+    protect,
+    getCompanyReports,
+);
+
+router.post(
+    "/:ticker",
+    protect,
+    createReport,
+);
 
 export default router;
