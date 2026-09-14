@@ -10,6 +10,8 @@ const RESOURCE_MAP = [
   ["/api/v1/watchlists", "WATCHLIST"],
   ["/api/v1/reports", "REPORT"],
   ["/api/v1/notifications", "NOTIFICATION"],
+  ["/api/v1/assessments", "ASSESSMENT"],
+  ["/api/v1/marketing", "MARKETING"],
 ];
 
 const getResourceType = (url) => {
