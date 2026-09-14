@@ -12,6 +12,7 @@ import watchlistRoutes from './routes/watchlistRoutes.js'
 import reportRoutes from './routes/reportRoutes.js'
 import notificationRoutes from './routes/notificationRoutes.js'
 import auditLogRoutes from './routes/auditLogRoutes.js'
+import assessmentRoutes from "./routes/assessmentRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
@@ -159,6 +160,7 @@ app.use("/api/v1/watchlists", watchlistRoutes);
 app.use("/api/v1/reports", reportRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/audit-logs", auditLogRoutes);
+app.use("/api/v1/assessments", assessmentRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
