@@ -11,27 +11,16 @@ import investmentRoutes from './routes/investmentRoutes.js'
 import watchlistRoutes from './routes/watchlistRoutes.js'
 import reportRoutes from './routes/reportRoutes.js'
 import notificationRoutes from './routes/notificationRoutes.js'
+import auditLogRoutes from './routes/auditLogRoutes.js'
 
 import { ApiError } from "./utils/ApiError.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
 
 const app = express();
 
-// ============================================================
-// ENVIRONMENT
-// ============================================================
-
 const isProduction = process.env.NODE_ENV === "production";
 
-// ============================================================
-// TRUST PROXY
-// ============================================================
-
 app.set("trust proxy", 1);
-
-// ============================================================
-// SECURITY HEADERS
-// ============================================================
 
 app.use(
   helmet({
@@ -40,10 +29,6 @@ app.use(
     },
   }),
 );
-
-// ============================================================
-// CORS
-// ============================================================
 
 const configuredOrigins = (
   process.env.FRONTEND_URL || "http://localhost:3000,http://localhost:5173"
@@ -76,10 +61,6 @@ app.use(
   }),
 );
 
-// ============================================================
-// GENERAL API RATE LIMITER
-// ============================================================
-
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number(process.env.API_RATE_LIMIT || 200),
@@ -96,10 +77,6 @@ const apiLimiter = rateLimit({
 
 app.use("/api/", apiLimiter);
 
-// ============================================================
-// STRICT AUTHENTICATION RATE LIMITER
-// ============================================================
-
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number(process.env.AUTH_RATE_LIMIT || 20),
@@ -113,10 +90,6 @@ const authLimiter = rateLimit({
   },
 });
 
-// ============================================================
-// BODY PARSING
-// ============================================================
-
 app.use(
   express.json({
     limit: process.env.JSON_BODY_LIMIT || "1mb",
@@ -129,10 +102,6 @@ app.use(
     limit: process.env.URLENCODED_BODY_LIMIT || "1mb",
   }),
 );
-
-// ============================================================
-// HEALTH CHECK
-// ============================================================
 
 app.get("/health", (req, res) => {
   return res.status(200).json(
@@ -162,10 +131,6 @@ app.get("/api/v1/health", (req, res) => {
   );
 });
 
-// ============================================================
-// REQUEST LOGGING
-// ============================================================
-
 app.use((req, res, next) => {
   const startTime = Date.now();
 
@@ -180,65 +145,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// ============================================================
-// AUTHENTICATION ROUTES
-// ============================================================
-
 app.use("/api/v1/auth", authLimiter, authRoutes);
-
-// ============================================================
-// COMPANY ROUTES
-// ============================================================
-
 app.use("/api/v1/companies", companyRoutes);
-
-// ============================================================
-// LEDGER ROUTES
-// ============================================================
-
 app.use("/api/v1/ledger", ledgerRoutes);
-
-// ============================================================
-// UPLOAD ROUTES
-// ============================================================
-
 app.use("/api/v1/upload", uploadRoutes);
-
-// ============================================================
-// INVESTMENT ROUTES
-// ============================================================
-
 app.use("/api/v1/investments", investmentRoutes);
-
-// ============================================================
-// WATCHLIST ROUTES
-// ============================================================
-
 app.use("/api/v1/watchlists", watchlistRoutes);
-
-// ============================================================
-// REPORT ROUTES
-// ============================================================
-
 app.use("/api/v1/reports", reportRoutes);
-
-// ============================================================
-// NOTIFICATION ROUTES
-// ============================================================
-
 app.use("/api/v1/notifications", notificationRoutes);
-
-// ============================================================
-// 404 HANDLER
-// ============================================================
+app.use("/api/v1/audit-logs", auditLogRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
 });
-
-// ============================================================
-// GLOBAL ERROR HANDLER
-// ============================================================
 
 app.use((err, req, res, next) => {
   void next;
