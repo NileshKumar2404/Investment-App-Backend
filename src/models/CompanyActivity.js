@@ -19,7 +19,20 @@ const companyActivitySchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ['IDENTITY', 'KYC', 'FINANCIAL', 'FUNDING', 'TEAM', 'DOCUMENT', 'ASSESSMENT', 'SWOT', 'PESTLE', 'MARKETING', 'WORKFLOW'],
+      enum: [
+        'IDENTITY',
+        'KYC',
+        'FINANCIAL',
+        'FUNDING',
+        'INVESTMENT',
+        'TEAM',
+        'DOCUMENT',
+        'ASSESSMENT',
+        'SWOT',
+        'PESTLE',
+        'MARKETING',
+        'WORKFLOW',
+      ],
       default: 'WORKFLOW',
     },
     description: {
