@@ -9,6 +9,7 @@ import ledgerRoutes from "./routes/ledgerRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import investmentRoutes from './routes/investmentRoutes.js'
 import watchlistRoutes from './routes/watchlistRoutes.js'
+import reportRoutes from './routes/reportRoutes.js'
 
 import { ApiError } from "./utils/ApiError.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
@@ -293,6 +294,9 @@ app.use("/api/v1/investments", investmentRoutes);
 
 
 app.use("/api/v1/watchlist", watchlistRoutes);
+
+
+app.use("/api/v1/report", reportRoutes);
 
 // ============================================================
 // 404 HANDLER
