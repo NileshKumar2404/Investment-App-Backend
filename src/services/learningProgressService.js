@@ -44,6 +44,7 @@ export const updateLessonProgress = async ({ companyId, userId, lessonId, status
     status: nextStatus,
     progressPercent: nextProgress,
     lastAccessedAt: now,
+    updatedAt: now,
   };
 
   if (nextStatus === "COMPLETED") {
@@ -52,27 +53,35 @@ export const updateLessonProgress = async ({ companyId, userId, lessonId, status
     update.completedAt = null;
   }
 
-  // Persist through the document API instead of findOneAndUpdate/upsert.
-  // This makes the write and the subsequent read use the same hydrated
-  // document/connection path and avoids CI-only upsert visibility issues.
-  let record = await LearningProgress.findOne({ companyId, userId, lessonId });
+  // Use the model's native MongoDB collection for the write. This avoids
+  // Mongoose's buffered document/upsert path in CI while keeping the same
+  // collection and connection used by all subsequent reads.
+  const collection = LearningProgress.collection;
+  const filter = { companyId, userId, lessonId };
+
+  await collection.updateOne(
+    filter,
+    {
+      $set: update,
+      $setOnInsert: {
+        companyId,
+        userId,
+        lessonId,
+        startedAt: now,
+        createdAt: now,
+      },
+    },
+    { upsert: true },
+  );
+
+  const record = await collection.findOne(filter);
 
   if (!record) {
-    record = new LearningProgress({
-      companyId,
-      userId,
-      lessonId,
-      startedAt: now,
-      ...update,
-    });
-  } else {
-    Object.assign(record, update);
+    throw new Error("Learning progress was not persisted");
   }
 
-  await record.save();
-
   return {
-    ...record.toObject(),
+    ...record,
     lesson,
   };
 };
