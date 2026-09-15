@@ -14,6 +14,7 @@ import notificationRoutes from './routes/notificationRoutes.js'
 import auditLogRoutes from './routes/auditLogRoutes.js'
 import assessmentRoutes from "./routes/assessmentRoutes.js";
 import marketingRoutes from "./routes/marketingRoutes.js";
+import startupProfileRoutes from "./routes/startupProfileRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
@@ -163,6 +164,7 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/audit-logs", auditLogRoutes);
 app.use("/api/v1/assessments", assessmentRoutes);
 app.use("/api/v1/marketing", marketingRoutes);
+app.use("/api/v1/startup-profile", startupProfileRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
@@ -220,12 +222,7 @@ app.use((err, req, res, next) => {
   }
 
   return res.status(statusCode).json(
-    new ApiResponse(
-      statusCode,
-      null,
-      message,
-      errors,
-    ),
+    new ApiResponse(statusCode, null, message, errors),
   );
 });
 
