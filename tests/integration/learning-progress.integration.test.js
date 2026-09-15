@@ -1,27 +1,50 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { randomUUID } from "node:crypto";
+import { after, before, test } from "node:test";
 import mongoose from "mongoose";
+import http from "node:http";
 
-import LearningProgress from "../../src/models/LearningProgress.js";
-import {
+process.env.NODE_ENV = "test";
+process.env.MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/investment_os_ci";
+process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-only-investment-backend-test-secret";
+process.env.API_RATE_LIMIT = "1000";
+process.env.FRONTEND_URL = "http://localhost:3000";
+
+const { default: app } = await import("../../src/app.js");
+const { default: LearningProgress } = await import("../../src/models/LearningProgress.js");
+const {
   getLearningProgress,
   getLessonProgress,
   updateLessonProgress,
-} from "../../src/services/learningProgressService.js";
+} = await import("../../src/services/learningProgressService.js");
 
+const TEST_MONGO_URI = process.env.MONGO_URI;
 const companyId = new mongoose.Types.ObjectId();
 const userId = new mongoose.Types.ObjectId();
+let server;
+let baseUrl;
 
-const cleanup = async () => {
-  if (mongoose.connection.readyState === 1) {
-    await LearningProgress.deleteMany({ companyId, userId });
-  }
-};
+before(async () => {
+  await mongoose.connect(TEST_MONGO_URI, { serverSelectionTimeoutMS: 10000 });
+  await LearningProgress.deleteMany({ companyId, userId });
+
+  server = http.createServer(app);
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Unable to determine test server address");
+  baseUrl = `http://127.0.0.1:${address.port}`;
+});
+
+after(async () => {
+  await LearningProgress.deleteMany({ companyId, userId });
+  if (server) await new Promise((resolve) => server.close(resolve));
+  if (mongoose.connection.readyState === 1) await mongoose.connection.close();
+});
 
 test("learning progress returns not-started state for a valid lesson", async () => {
-  await cleanup();
-
   const result = await getLessonProgress({ companyId, userId, lessonId: "lesson-14" });
 
   assert.equal(result.lesson.title, "Unit Economics");
@@ -30,16 +53,13 @@ test("learning progress returns not-started state for a valid lesson", async () 
 });
 
 test("learning progress rejects unknown lessons without creating data", async () => {
-  await cleanup();
-
   const result = await getLessonProgress({ companyId, userId, lessonId: "lesson-999" });
 
   assert.equal(result, null);
+  assert.equal(await LearningProgress.countDocuments({ companyId, userId }), 0);
 });
 
 test("learning progress can start and complete a lesson", async () => {
-  await cleanup();
-
   const started = await updateLessonProgress({
     companyId,
     userId,
@@ -63,7 +83,7 @@ test("learning progress can start and complete a lesson", async () => {
 });
 
 test("learning progress summary counts completed and in-progress lessons", async () => {
-  await cleanup();
+  await LearningProgress.deleteMany({ companyId, userId });
 
   await updateLessonProgress({ companyId, userId, lessonId: "lesson-1", progressPercent: 25 });
   await updateLessonProgress({ companyId, userId, lessonId: "lesson-2", status: "COMPLETED" });
@@ -77,16 +97,13 @@ test("learning progress summary counts completed and in-progress lessons", async
   assert.equal(result.summary.remainingLessons, 29);
   assert.equal(result.summary.progressPercent, 3);
   assert.equal(result.lessons.length, 2);
-
-  await cleanup();
 });
 
 test("learning progress uses company and user scope", async () => {
-  await cleanup();
-
   const otherCompanyId = new mongoose.Types.ObjectId();
   const otherUserId = new mongoose.Types.ObjectId();
 
+  await LearningProgress.deleteMany({ companyId, userId });
   await updateLessonProgress({ companyId, userId, lessonId: "lesson-3", status: "COMPLETED" });
 
   const isolated = await getLearningProgress({ companyId: otherCompanyId, userId: otherUserId });
@@ -95,5 +112,9 @@ test("learning progress uses company and user scope", async () => {
   assert.equal(isolated.lessons.length, 0);
 
   await LearningProgress.deleteMany({ companyId: otherCompanyId, userId: otherUserId });
-  await cleanup();
+});
+
+test("learning progress endpoint requires authentication", async () => {
+  const response = await fetch(`${baseUrl}/api/v1/learning/TESTIQ/progress`);
+  assert.equal(response.status, 401);
 });
