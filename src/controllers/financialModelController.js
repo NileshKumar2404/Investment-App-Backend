@@ -1,7 +1,7 @@
 import Company from "../models/Company.js";
 import FinancialModel from "../models/FinancialModel.js";
 import { buildFinancialModel } from "../services/financialModelService.js";
-import asyncHandler from "../utils/asyncHandler.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
