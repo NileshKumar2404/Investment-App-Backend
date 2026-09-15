@@ -52,17 +52,27 @@ export const updateLessonProgress = async ({ companyId, userId, lessonId, status
     update.completedAt = null;
   }
 
-  const record = await LearningProgress.findOneAndUpdate(
-    { companyId, userId, lessonId },
-    {
-      $set: update,
-      $setOnInsert: { startedAt: now },
-    },
-    { new: true, upsert: true, runValidators: true },
-  ).lean();
+  // Persist through the document API instead of findOneAndUpdate/upsert.
+  // This makes the write and the subsequent read use the same hydrated
+  // document/connection path and avoids CI-only upsert visibility issues.
+  let record = await LearningProgress.findOne({ companyId, userId, lessonId });
+
+  if (!record) {
+    record = new LearningProgress({
+      companyId,
+      userId,
+      lessonId,
+      startedAt: now,
+      ...update,
+    });
+  } else {
+    Object.assign(record, update);
+  }
+
+  await record.save();
 
   return {
-    ...record,
+    ...record.toObject(),
     lesson,
   };
 };
