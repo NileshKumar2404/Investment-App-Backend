@@ -15,6 +15,7 @@ import auditLogRoutes from './routes/auditLogRoutes.js'
 import assessmentRoutes from "./routes/assessmentRoutes.js";
 import marketingRoutes from "./routes/marketingRoutes.js";
 import startupProfileRoutes from "./routes/startupProfileRoutes.js";
+import startupIdeaAnalyzerRoutes from "./routes/startupIdeaAnalyzerRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
@@ -165,6 +166,7 @@ app.use("/api/v1/audit-logs", auditLogRoutes);
 app.use("/api/v1/assessments", assessmentRoutes);
 app.use("/api/v1/marketing", marketingRoutes);
 app.use("/api/v1/startup-profile", startupProfileRoutes);
+app.use("/api/v1/startup-idea-analyzer", startupIdeaAnalyzerRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
