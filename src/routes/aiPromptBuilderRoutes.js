@@ -11,9 +11,12 @@ import {
 
 const router = express.Router();
 
-router.use(protect);
-
+// Prompt types are static metadata and do not expose company data.
+// Keep this endpoint public so the frontend can discover the available
+// prompt modes before the user is authenticated.
 router.get("/types", getPromptTypes);
+
+router.use(protect);
 
 router.use("/:ticker", requireCompanyAccess());
 
