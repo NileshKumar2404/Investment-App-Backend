@@ -22,6 +22,7 @@ import financialModelRoutes from "./routes/financialModelRoutes.js";
 import metricRelationshipRoutes from "./routes/metricRelationshipRoutes.js";
 import actionPlanRoutes from "./routes/actionPlanRoutes.js";
 import aiPromptBuilderRoutes from "./routes/aiPromptBuilderRoutes.js";
+import startupHealthScoreRoutes from "./routes/startupHealthScoreRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
@@ -86,8 +87,6 @@ const apiLimiter = rateLimit({
   skip: (req) => req.path === "/health" || req.path === "/v1/health",
 });
 
-app.use("/api/", apiLimiter);
-
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number(process.env.AUTH_RATE_LIMIT || 20),
@@ -97,7 +96,7 @@ const authLimiter = rateLimit({
     statusCode: 429,
     success: false,
     message: "Too many authentication attempts. Please try again later.",
-    data: null,
+    errors: [],
   },
 });
 
@@ -179,6 +178,7 @@ app.use("/api/v1/financial-model", financialModelRoutes);
 app.use("/api/v1/metric-relationships", metricRelationshipRoutes);
 app.use("/api/v1/action-plan", actionPlanRoutes);
 app.use("/api/v1/ai-prompt-builder", aiPromptBuilderRoutes);
+app.use("/api/v1/startup-health", startupHealthScoreRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
