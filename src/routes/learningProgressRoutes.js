@@ -16,20 +16,20 @@ router.use(protect);
 router.use("/:ticker", requireCompanyAccess());
 
 router.get(
-  "/:ticker",
+  "/:ticker/progress",
   requireCompanyPermission("VIEW"),
   getFounderLearningProgress,
 );
 
 router.get(
-  "/:ticker/:lessonId",
+  "/:ticker/progress/:lessonId",
   requireCompanyPermission("VIEW"),
   getFounderLessonProgress,
 );
 
 router.patch(
-  "/:ticker/:lessonId",
-  requireCompanyPermission("VIEW"),
+  "/:ticker/progress/:lessonId",
+  requireCompanyPermission("EDIT"),
   updateFounderLessonProgress,
 );
 
