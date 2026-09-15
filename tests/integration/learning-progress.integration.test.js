@@ -4,7 +4,11 @@ import mongoose from "mongoose";
 import http from "node:http";
 
 process.env.NODE_ENV = "test";
-process.env.MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/investment_os_ci";
+
+const configuredMongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/investment_os_ci";
+const mongoUrl = new URL(configuredMongoUri);
+mongoUrl.pathname = "/investment_os_learning_progress_ci";
+process.env.MONGO_URI = mongoUrl.toString();
 process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-only-investment-backend-test-secret";
 process.env.API_RATE_LIMIT = "1000";
 process.env.FRONTEND_URL = "http://localhost:3000";
