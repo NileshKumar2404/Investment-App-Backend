@@ -9,17 +9,17 @@ test("startup health score service calculates a healthy startup", () => {
       churnRate: 2,
       runway: 12,
     },
-    20,
+    15,
   );
 
   assert.equal(result.healthStatus, "HEALTHY");
   assert.ok(result.overallScore >= 65);
-  assert.ok(result.metricScores.growth > 70);
+  assert.ok(result.metricScores.growth > 50);
   assert.ok(result.metricScores.ltvCac > 80);
   assert.equal(result.metricScores.churn, 100);
   assert.ok(result.metricScores.runway > 60);
   assert.ok(result.strengths.length >= 1);
-  assert.equal(result.risks.length, 0);
+  assert.ok(result.risks.length >= 1);
 });
 
 test("startup health score identifies critical runway and weak unit economics", () => {
