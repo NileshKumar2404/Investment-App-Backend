@@ -17,17 +17,17 @@ const router = express.Router();
 router.use(protect);
 
 router.get(
-  "/:ticker",
-  requireCompanyAccess(),
-  requireCompanyPermission("VIEW"),
-  getStartupProfile,
-);
-
-router.get(
   "/:ticker/metrics",
   requireCompanyAccess(),
   requireCompanyPermission("VIEW"),
   getStartupMetrics,
+);
+
+router.get(
+  "/:ticker",
+  requireCompanyAccess(),
+  requireCompanyPermission("VIEW"),
+  getStartupProfile,
 );
 
 router.patch(
