@@ -19,6 +19,7 @@ import startupIdeaAnalyzerRoutes from "./routes/startupIdeaAnalyzerRoutes.js";
 import businessIdeaTestingRoutes from "./routes/businessIdeaTestingRoutes.js";
 import gtmRoadmapRoutes from "./routes/gtmRoadmapRoutes.js";
 import financialModelRoutes from "./routes/financialModelRoutes.js";
+import metricRelationshipRoutes from "./routes/metricRelationshipRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
@@ -173,6 +174,7 @@ app.use("/api/v1/startup-idea-analyzer", startupIdeaAnalyzerRoutes);
 app.use("/api/v1/business-idea-testing", businessIdeaTestingRoutes);
 app.use("/api/v1/gtm-roadmap", gtmRoadmapRoutes);
 app.use("/api/v1/financial-model", financialModelRoutes);
+app.use("/api/v1/metric-relationships", metricRelationshipRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
