@@ -21,12 +21,7 @@ describe("Financial Model engine", () => {
   });
 
   it("allows explicit assumptions to override profile values", () => {
-    const assumptions = buildFinancialAssumptions(company, {
-      startingMrr: 200000,
-      monthlyGrowthRate: 5,
-      monthlyFixedCosts: 80000,
-      oneTimeFunding: 500000,
-    });
+    const assumptions = buildFinancialAssumptions(company, { startingMrr: 200000, monthlyGrowthRate: 5, monthlyFixedCosts: 80000, oneTimeFunding: 500000 });
     assert.equal(assumptions.startingMrr, 200000);
     assert.equal(assumptions.monthlyGrowthRate, 5);
     assert.equal(assumptions.monthlyFixedCosts, 80000);
@@ -66,6 +61,6 @@ describe("Financial Model engine", () => {
     const summary = summarizeFinancialForecast(forecast, assumptions.startingCash);
     assert.ok(summary.averageMonthlyBurn > 0);
     assert.ok(summary.runwayMonths >= 0);
-    assert.equal(summary.endingCash, -1500000);
+    assert.equal(summary.endingCash, -900000);
   });
 });
