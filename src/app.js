@@ -18,6 +18,7 @@ import startupProfileRoutes from "./routes/startupProfileRoutes.js";
 import startupIdeaAnalyzerRoutes from "./routes/startupIdeaAnalyzerRoutes.js";
 import businessIdeaTestingRoutes from "./routes/businessIdeaTestingRoutes.js";
 import gtmRoadmapRoutes from "./routes/gtmRoadmapRoutes.js";
+import financialModelRoutes from "./routes/financialModelRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
@@ -171,6 +172,7 @@ app.use("/api/v1/startup-profile", startupProfileRoutes);
 app.use("/api/v1/startup-idea-analyzer", startupIdeaAnalyzerRoutes);
 app.use("/api/v1/business-idea-testing", businessIdeaTestingRoutes);
 app.use("/api/v1/gtm-roadmap", gtmRoadmapRoutes);
+app.use("/api/v1/financial-model", financialModelRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
@@ -197,9 +199,7 @@ app.use((err, req, res, next) => {
     const duplicateFields = Object.keys(err.keyPattern || {});
     message =
       duplicateFields.length > 0
-        ? `A record with the specified ${duplicateFields.join(
-            ", ",
-          )} already exists.`
+        ? `A record with the specified ${duplicateFields.join(", ")} already exists.`
         : "A record with the specified value already exists.";
     errors = [];
   }
