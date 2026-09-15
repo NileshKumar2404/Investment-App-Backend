@@ -55,9 +55,9 @@ test("learning curriculum summary reports the complete catalog", () => {
     summary.categories.reduce((sum, category) => sum + category.lessonCount, 0),
     30,
   );
-  assert.equal(summary.difficultyCounts.BEGINNER, 10);
+  assert.equal(summary.difficultyCounts.BEGINNER, 12);
   assert.equal(summary.difficultyCounts.INTERMEDIATE, 14);
-  assert.equal(summary.difficultyCounts.ADVANCED, 6);
+  assert.equal(summary.difficultyCounts.ADVANCED, 4);
 });
 
 test("learning curriculum returns a lesson by id and null for an unknown lesson", () => {
