@@ -92,7 +92,7 @@ const authLimiter = rateLimit({
     statusCode: 429,
     success: false,
     message: "Too many authentication attempts. Please try again later.",
-    errors: [],
+    data: null,
   },
 });
 
