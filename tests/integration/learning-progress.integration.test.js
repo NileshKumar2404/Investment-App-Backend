@@ -22,14 +22,20 @@ const {
 } = await import("../../src/services/learningProgressService.js");
 
 const TEST_MONGO_URI = process.env.MONGO_URI;
-const companyId = new mongoose.Types.ObjectId();
-const userId = new mongoose.Types.ObjectId();
 let server;
 let baseUrl;
 
+const createScope = () => ({
+  companyId: new mongoose.Types.ObjectId(),
+  userId: new mongoose.Types.ObjectId(),
+});
+
+const cleanupScope = async ({ companyId, userId }) => {
+  await LearningProgress.deleteMany({ companyId, userId });
+};
+
 before(async () => {
   await mongoose.connect(TEST_MONGO_URI, { serverSelectionTimeoutMS: 10000 });
-  await LearningProgress.deleteMany({ companyId, userId });
 
   server = http.createServer(app);
   await new Promise((resolve, reject) => {
@@ -43,79 +49,99 @@ before(async () => {
 });
 
 after(async () => {
-  await LearningProgress.deleteMany({ companyId, userId });
   if (server) await new Promise((resolve) => server.close(resolve));
   if (mongoose.connection.readyState === 1) await mongoose.connection.close();
 });
 
 test("learning progress returns not-started state for a valid lesson", async () => {
-  const result = await getLessonProgress({ companyId, userId, lessonId: "lesson-14" });
+  const scope = createScope();
+  try {
+    const result = await getLessonProgress({ ...scope, lessonId: "lesson-14" });
 
-  assert.equal(result.lesson.title, "Unit Economics");
-  assert.equal(result.progress.status, "NOT_STARTED");
-  assert.equal(result.progress.progressPercent, 0);
+    assert.equal(result.lesson.title, "Unit Economics");
+    assert.equal(result.progress.status, "NOT_STARTED");
+    assert.equal(result.progress.progressPercent, 0);
+  } finally {
+    await cleanupScope(scope);
+  }
 });
 
 test("learning progress rejects unknown lessons without creating data", async () => {
-  const result = await getLessonProgress({ companyId, userId, lessonId: "lesson-999" });
+  const scope = createScope();
+  try {
+    const result = await getLessonProgress({ ...scope, lessonId: "lesson-999" });
 
-  assert.equal(result, null);
-  assert.equal(await LearningProgress.countDocuments({ companyId, userId }), 0);
+    assert.equal(result, null);
+    assert.equal(await LearningProgress.countDocuments(scope), 0);
+  } finally {
+    await cleanupScope(scope);
+  }
 });
 
 test("learning progress can start and complete a lesson", async () => {
-  const started = await updateLessonProgress({
-    companyId,
-    userId,
-    lessonId: "lesson-14",
-    progressPercent: 40,
-  });
+  const scope = createScope();
+  try {
+    const started = await updateLessonProgress({
+      ...scope,
+      lessonId: "lesson-14",
+      progressPercent: 40,
+    });
 
-  assert.equal(started.status, "IN_PROGRESS");
-  assert.equal(started.progressPercent, 40);
+    assert.equal(started.status, "IN_PROGRESS");
+    assert.equal(started.progressPercent, 40);
 
-  const completed = await updateLessonProgress({
-    companyId,
-    userId,
-    lessonId: "lesson-14",
-    status: "COMPLETED",
-  });
+    const completed = await updateLessonProgress({
+      ...scope,
+      lessonId: "lesson-14",
+      status: "COMPLETED",
+    });
 
-  assert.equal(completed.status, "COMPLETED");
-  assert.equal(completed.progressPercent, 100);
-  assert.ok(completed.completedAt);
+    assert.equal(completed.status, "COMPLETED");
+    assert.equal(completed.progressPercent, 100);
+    assert.ok(completed.completedAt);
+  } finally {
+    await cleanupScope(scope);
+  }
 });
 
 test("learning progress summary counts completed and in-progress lessons", async () => {
-  await LearningProgress.deleteMany({ companyId, userId });
+  const scope = createScope();
+  try {
+    await updateLessonProgress({ ...scope, lessonId: "lesson-1", progressPercent: 25 });
+    await updateLessonProgress({ ...scope, lessonId: "lesson-2", status: "COMPLETED" });
 
-  await updateLessonProgress({ companyId, userId, lessonId: "lesson-1", progressPercent: 25 });
-  await updateLessonProgress({ companyId, userId, lessonId: "lesson-2", status: "COMPLETED" });
+    const storedCount = await LearningProgress.countDocuments(scope);
+    assert.equal(storedCount, 2);
 
-  const result = await getLearningProgress({ companyId, userId });
+    const result = await getLearningProgress(scope);
 
-  assert.equal(result.summary.totalLessons, 30);
-  assert.equal(result.summary.startedLessons, 2);
-  assert.equal(result.summary.inProgressLessons, 1);
-  assert.equal(result.summary.completedLessons, 1);
-  assert.equal(result.summary.remainingLessons, 29);
-  assert.equal(result.summary.progressPercent, 3);
-  assert.equal(result.lessons.length, 2);
+    assert.equal(result.summary.totalLessons, 30);
+    assert.equal(result.summary.startedLessons, 2);
+    assert.equal(result.summary.inProgressLessons, 1);
+    assert.equal(result.summary.completedLessons, 1);
+    assert.equal(result.summary.remainingLessons, 29);
+    assert.equal(result.summary.progressPercent, 3);
+    assert.equal(result.lessons.length, 2);
+  } finally {
+    await cleanupScope(scope);
+  }
 });
 
 test("learning progress uses company and user scope", async () => {
-  const otherCompanyId = new mongoose.Types.ObjectId();
-  const otherUserId = new mongoose.Types.ObjectId();
+  const scope = createScope();
+  const otherScope = createScope();
 
-  await LearningProgress.deleteMany({ companyId, userId });
-  await updateLessonProgress({ companyId, userId, lessonId: "lesson-3", status: "COMPLETED" });
+  try {
+    await updateLessonProgress({ ...scope, lessonId: "lesson-3", status: "COMPLETED" });
 
-  const isolated = await getLearningProgress({ companyId: otherCompanyId, userId: otherUserId });
-  assert.equal(isolated.summary.startedLessons, 0);
-  assert.equal(isolated.summary.completedLessons, 0);
-  assert.equal(isolated.lessons.length, 0);
-
-  await LearningProgress.deleteMany({ companyId: otherCompanyId, userId: otherUserId });
+    const isolated = await getLearningProgress(otherScope);
+    assert.equal(isolated.summary.startedLessons, 0);
+    assert.equal(isolated.summary.completedLessons, 0);
+    assert.equal(isolated.lessons.length, 0);
+  } finally {
+    await cleanupScope(scope);
+    await cleanupScope(otherScope);
+  }
 });
 
 test("learning progress endpoint requires authentication", async () => {
