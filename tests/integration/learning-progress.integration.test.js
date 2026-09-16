@@ -8,10 +8,17 @@ process.env.NODE_ENV = "test";
 const configuredMongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/investment_os_ci";
 const mongoUrl = new URL(configuredMongoUri);
 mongoUrl.pathname = "/investment_os_learning_progress_ci";
-process.env.MONGO_URI = mongoUrl.toString();
+const TEST_MONGO_URI = mongoUrl.toString();
+
+process.env.MONGO_URI = TEST_MONGO_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-only-investment-backend-test-secret";
 process.env.API_RATE_LIMIT = "1000";
 process.env.FRONTEND_URL = "http://localhost:3000";
+
+// Connect to the exact CI database before loading app/routes/models.
+// The LearningProgress model is therefore created on the same Mongoose
+// connection used by every test operation in this file.
+await mongoose.connect(TEST_MONGO_URI, { serverSelectionTimeoutMS: 10000 });
 
 const { default: app } = await import("../../src/app.js");
 const { default: LearningProgress } = await import("../../src/models/LearningProgress.js");
@@ -21,7 +28,6 @@ const {
   updateLessonProgress,
 } = await import("../../src/services/learningProgressService.js");
 
-const TEST_MONGO_URI = process.env.MONGO_URI;
 let server;
 let baseUrl;
 
@@ -35,8 +41,6 @@ const cleanupScope = async ({ companyId, userId }) => {
 };
 
 before(async () => {
-  await mongoose.connect(TEST_MONGO_URI, { serverSelectionTimeoutMS: 10000 });
-
   server = http.createServer(app);
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -50,7 +54,7 @@ before(async () => {
 
 after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
-  if (mongoose.connection.readyState === 1) await mongoose.connection.close();
+  if (mongoose.connection.readyState !== 0) await mongoose.connection.close();
 });
 
 test("learning progress returns not-started state for a valid lesson", async () => {
