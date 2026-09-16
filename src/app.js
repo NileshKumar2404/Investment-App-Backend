@@ -24,6 +24,7 @@ import actionPlanRoutes from "./routes/actionPlanRoutes.js";
 import aiPromptBuilderRoutes from "./routes/aiPromptBuilderRoutes.js";
 import startupHealthScoreRoutes from "./routes/startupHealthScoreRoutes.js";
 import learningCurriculumRoutes from "./routes/learningCurriculumRoutes.js";
+import learningProgressRoutes from "./routes/learningProgressRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
@@ -156,8 +157,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Centralized audit logging for state-changing requests across modules.
-// Authentication events continue to use explicit auth-controller audit entries.
 app.use(auditRequestMiddleware);
 
 app.use("/api/v1/auth", authLimiter, authRoutes);
@@ -181,6 +180,7 @@ app.use("/api/v1/action-plan", actionPlanRoutes);
 app.use("/api/v1/ai-prompt-builder", aiPromptBuilderRoutes);
 app.use("/api/v1/startup-health", startupHealthScoreRoutes);
 app.use("/api/v1/learning", learningCurriculumRoutes);
+app.use("/api/v1/learning", learningProgressRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
