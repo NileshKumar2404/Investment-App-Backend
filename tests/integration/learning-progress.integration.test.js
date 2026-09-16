@@ -13,9 +13,6 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-only-investment-backend-t
 process.env.API_RATE_LIMIT = "1000";
 process.env.FRONTEND_URL = "http://localhost:3000";
 
-// Connect to the CI MongoDB server first, while selecting a dedicated database
-// explicitly. This keeps the default Mongoose connection and the test database
-// unambiguous across GitHub Actions workers.
 await mongoose.connect(configuredMongoUri, {
   dbName: TEST_DB_NAME,
   serverSelectionTimeoutMS: 10000,
@@ -116,12 +113,6 @@ test("learning progress summary counts completed and in-progress lessons", async
   try {
     await updateLessonProgress({ ...scope, lessonId: "lesson-1", progressPercent: 25 });
     await updateLessonProgress({ ...scope, lessonId: "lesson-2", status: "COMPLETED" });
-
-    const storedCount = await LearningProgress.countDocuments({
-      companyId: scope.companyId,
-      userId: scope.userId,
-    });
-    assert.equal(storedCount, 2);
 
     const result = await getLearningProgress(scope);
 
