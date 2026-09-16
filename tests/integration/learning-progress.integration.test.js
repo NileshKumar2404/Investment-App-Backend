@@ -6,19 +6,22 @@ import http from "node:http";
 process.env.NODE_ENV = "test";
 
 const configuredMongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/investment_os_ci";
-const mongoUrl = new URL(configuredMongoUri);
-mongoUrl.pathname = "/investment_os_learning_progress_ci";
-const TEST_MONGO_URI = mongoUrl.toString();
+const TEST_DB_NAME = "investment_os_learning_progress_ci";
 
-process.env.MONGO_URI = TEST_MONGO_URI;
+process.env.MONGO_URI = configuredMongoUri;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-only-investment-backend-test-secret";
 process.env.API_RATE_LIMIT = "1000";
 process.env.FRONTEND_URL = "http://localhost:3000";
 
-// Connect to the exact CI database before loading app/routes/models.
-// The LearningProgress model is therefore created on the same Mongoose
-// connection used by every test operation in this file.
-await mongoose.connect(TEST_MONGO_URI, { serverSelectionTimeoutMS: 10000 });
+// Connect to the CI MongoDB server first, while selecting a dedicated database
+// explicitly. This keeps the default Mongoose connection and the test database
+// unambiguous across GitHub Actions workers.
+await mongoose.connect(configuredMongoUri, {
+  dbName: TEST_DB_NAME,
+  serverSelectionTimeoutMS: 10000,
+});
+
+await mongoose.connection.db.command({ ping: 1 });
 
 const { default: app } = await import("../../src/app.js");
 const { default: LearningProgress } = await import("../../src/models/LearningProgress.js");
@@ -114,7 +117,10 @@ test("learning progress summary counts completed and in-progress lessons", async
     await updateLessonProgress({ ...scope, lessonId: "lesson-1", progressPercent: 25 });
     await updateLessonProgress({ ...scope, lessonId: "lesson-2", status: "COMPLETED" });
 
-    const storedCount = await LearningProgress.countDocuments(scope);
+    const storedCount = await LearningProgress.countDocuments({
+      companyId: scope.companyId,
+      userId: scope.userId,
+    });
     assert.equal(storedCount, 2);
 
     const result = await getLearningProgress(scope);
