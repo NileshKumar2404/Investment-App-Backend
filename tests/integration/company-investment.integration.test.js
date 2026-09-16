@@ -5,8 +5,7 @@ import http from "node:http";
 import mongoose from "mongoose";
 
 const TEST_MONGO_URI =
-  process.env.MONGO_URI ||
-  "mongodb://127.0.0.1:27017/investment_os_ci";
+  process.env.MONGO_URI || "mongodb://127.0.0.1:27017/investment_os_ci";
 
 process.env.NODE_ENV = "test";
 process.env.MONGO_URI = TEST_MONGO_URI;
@@ -20,9 +19,8 @@ process.env.FRONTEND_URL = "http://localhost:3000";
 const { default: app } = await import("../../src/app.js");
 const { default: User } = await import("../../src/models/User.js");
 const { default: Company } = await import("../../src/models/Company.js");
-const { default: CompanyMember } = await import(
-  "../../src/models/CompanyMember.js",
-);
+const { default: CompanyMember } =
+  await import("../../src/models/CompanyMember.js");
 const { Investment } = await import("../../src/models/investment.js");
 
 let server;
@@ -63,9 +61,7 @@ const request = async (path, options = {}) => {
     ...options,
     headers: {
       ...(options.body ? { "content-type": "application/json" } : {}),
-      ...(options.token
-        ? { Authorization: `Bearer ${options.token}` }
-        : {}),
+      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
       ...(options.headers || {}),
     },
   });
@@ -302,10 +298,7 @@ describe("investment authorization and persistence", () => {
     assert.equal(response.status, 200);
     assert.equal(body.success, true);
     assert.equal(body.data.length, 1);
-    assert.equal(
-      body.data[0].companyId._id.toString(),
-      company._id.toString(),
-    );
+    assert.equal(body.data[0].companyId._id.toString(), company._id.toString());
   });
 
   it("allows company members to view company investments", async () => {

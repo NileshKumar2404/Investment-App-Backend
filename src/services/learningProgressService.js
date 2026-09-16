@@ -10,14 +10,21 @@ const normalizePercent = (value) => {
   return Math.min(100, Math.max(0, Math.round(percent)));
 };
 
-const toProgressPayload = (record, lesson) => ({
-  lessonId: lesson.id,
-  lesson,
-  status: record?.status || "NOT_STARTED",
-  progressPercent: record?.progressPercent ?? 0,
-  startedAt: record?.startedAt || null,
-  completedAt: record?.completedAt || null,
-});
+const toProgressPayload = (record, lesson) => {
+  const progress = {
+    status: record?.status || "NOT_STARTED",
+    progressPercent: record?.progressPercent ?? 0,
+    startedAt: record?.startedAt || null,
+    completedAt: record?.completedAt || null,
+  };
+
+  return {
+    lessonId: lesson.id,
+    lesson,
+    ...progress,
+    progress,
+  };
+};
 
 export const getLessonProgress = async ({ companyId, userId, lessonId }) => {
   const lesson = getLessonById(lessonId);
