@@ -57,7 +57,8 @@ app.use(
         return callback(null, true);
       }
 
-      if (configuredOrigins.includes(origin)) {
+      const isDevLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+      if (configuredOrigins.includes(origin) || isDevLocalhost) {
         return callback(null, true);
       }
 
