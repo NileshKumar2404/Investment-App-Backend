@@ -1,12 +1,19 @@
 import mongoose from "mongoose";
 
 import Assessment from "../models/Assessment.js";
+import Company from "../models/Company.js";
 import CompanyActivity from "../models/CompanyActivity.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
-const DOMAIN_KEYS = ["strategy", "operations", "finance", "leadership", "marketing"];
+import {
+  generateStandardAssessment,
+  generateAIAssessment,
+  evaluateAssessment as evaluateFounderAssessment
+} from "../services/founderAssessmentService.js";
+
+const DOMAIN_KEYS = ["leadership", "strategy", "finance", "marketing", "operations", "product"];
 
 const calculateArchetype = (score) => {
   if (score >= 80) return "Strategic Visionary";
@@ -75,6 +82,97 @@ const getAssessment = async (req) => {
   if (!assessment) throw new ApiError(404, "Assessment not found.");
   return assessment;
 };
+
+/**
+ * Generate 30 Assessment Questions (AI Dynamic or Standard Curated)
+ * POST /api/v1/assessments/:ticker/generate-test
+ */
+export const generateTest = asyncHandler(async (req, res) => {
+  const mode = req.query.mode || req.body?.mode || "standard";
+  let questions = [];
+
+  if (mode === "ai") {
+    questions = await generateAIAssessment({ company: req.company });
+  } else {
+    questions = generateStandardAssessment();
+  }
+
+  return res.status(200).json(new ApiResponse(200, {
+    mode,
+    totalQuestions: questions.length,
+    questions,
+    company: {
+      id: req.company._id,
+      name: req.company.companyName || req.company.name,
+      ticker: req.company.ticker,
+      stage: req.company.stage,
+      industry: req.company.industry
+    }
+  }, `Generated ${questions.length} assessment questions in ${mode} mode.`));
+});
+
+/**
+ * Submit & Grade Assessment
+ * POST /api/v1/assessments/:ticker/submit-test
+ */
+export const submitTest = asyncHandler(async (req, res) => {
+  const { questions = [], answers = {}, durationMinutes = 15, mode = "standard" } = req.body || {};
+
+  if (!Array.isArray(questions) || questions.length === 0) {
+    throw new ApiError(400, "Questions array is required to grade the assessment.");
+  }
+
+  // Evaluate assessment responses
+  const evalResult = evaluateFounderAssessment({ questions, answers, durationMinutes });
+
+  const assessment = await Assessment.create({
+    userId: req.user._id,
+    companyId: req.company._id,
+    score: evalResult.overallScore,
+    mode: mode === "ai" ? "ai" : "standard",
+    capabilityLevel: evalResult.capabilityLevel,
+    archetype: evalResult.archetype.name,
+    archetypeIcon: evalResult.archetype.icon,
+    archetypeDescription: evalResult.archetype.desc,
+    domainScores: evalResult.domainScores,
+    subskillScores: evalResult.subskillScores,
+    strengths: evalResult.strengths,
+    weaknesses: evalResult.weaknesses,
+    recommendations: evalResult.recommendations,
+    questionResults: evalResult.questionResults,
+    durationMinutes: evalResult.durationMinutes,
+    answers: answers
+  });
+
+  // Promote company status if score threshold reached and status allows advancement
+  const company = await Company.findById(req.company._id);
+  let statusUpdated = false;
+  if (company) {
+    company.founderCapabilityScore = evalResult.overallScore;
+    if (evalResult.overallScore >= 60) {
+      const allowedFrom = ["Draft", "Submitted", "Under Review", "Founder Assessment Pending", "Documents Pending"];
+      if (allowedFrom.includes(company.status)) {
+        company.status = "Investment Ready";
+        statusUpdated = true;
+      }
+    }
+    await company.save();
+  }
+
+  await logAssessmentActivity(
+    req.company._id,
+    req.user._id,
+    "ASSESSMENT_COMPLETED",
+    `Founder assessment completed with overall score ${evalResult.overallScore}/100 (${evalResult.archetype.name}).`
+  );
+
+  return res.status(201).json(new ApiResponse(201, {
+    assessment,
+    evaluation: evalResult,
+    companyStatus: company ? company.status : req.company.status,
+    statusUpdated
+  }, "Founder assessment evaluated and recorded successfully."));
+});
 
 export const createAssessment = asyncHandler(async (req, res) => {
   const { score, archetype, domainScores, subskillScores, answers, reviewNotes } = req.body || {};

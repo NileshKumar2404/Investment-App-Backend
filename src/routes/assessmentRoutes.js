@@ -1,6 +1,8 @@
 import express from "express";
 
 import {
+  generateTest,
+  submitTest,
   createAssessment,
   getAssessments,
   getMyAssessments,
@@ -15,69 +17,76 @@ import {
   requireCompanyAccess,
   requireCompanyPermission,
   requireCompanyManagement,
-  requireCompanyRole,
-  COMPANY_ROLES,
 } from "../middleware/companyAuthorization.middleware.js";
 
 const router = express.Router();
 
 router.use(protect);
 
-// Company assessment collection.
+// Test generation and submission endpoints
+router.post(
+  "/:ticker/generate-test",
+  requireCompanyAccess(),
+  requireCompanyPermission("VIEW"),
+  generateTest
+);
+
+router.post(
+  "/:ticker/submit-test",
+  requireCompanyAccess(),
+  requireCompanyPermission("CREATE"),
+  submitTest
+);
+
+// Company assessment collection
 router.get(
   "/:ticker",
   requireCompanyAccess(),
   requireCompanyPermission("VIEW"),
-  getAssessments,
+  getAssessments
 );
 
 router.post(
   "/:ticker",
   requireCompanyAccess(),
   requireCompanyPermission("CREATE"),
-  createAssessment,
+  createAssessment
 );
 
-// Current user's assessments. Keep this before /:ticker/:id.
+// Current user's assessments
 router.get(
   "/:ticker/my",
   requireCompanyAccess(),
   requireCompanyPermission("VIEW"),
-  getMyAssessments,
+  getMyAssessments
 );
 
 router.get(
   "/:ticker/:id",
   requireCompanyAccess(),
   requireCompanyPermission("VIEW"),
-  getAssessmentById,
+  getAssessmentById
 );
 
 router.patch(
   "/:ticker/:id",
   requireCompanyAccess(),
   requireCompanyPermission("EDIT"),
-  updateAssessment,
+  updateAssessment
 );
 
-router.patch(
+router.post(
   "/:ticker/:id/review",
   requireCompanyAccess(),
-  requireCompanyRole(
-    COMPANY_ROLES.OWNER,
-    COMPANY_ROLES.FOUNDER,
-    COMPANY_ROLES.CO_FOUNDER,
-    COMPANY_ROLES.ANALYST,
-    COMPANY_ROLES.ADVISOR,
-  ),
-  reviewAssessment,
+  requireCompanyManagement,
+  reviewAssessment
 );
 
 router.delete(
   "/:ticker/:id",
   requireCompanyAccess(),
   requireCompanyManagement,
-  deleteAssessment,
+  deleteAssessment
 );
 
 export default router;

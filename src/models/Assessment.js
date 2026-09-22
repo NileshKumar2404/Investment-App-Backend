@@ -27,18 +27,36 @@ const assessmentSchema = new mongoose.Schema(
       min: 0,
       max: 100,
     },
+    mode: {
+      type: String,
+      enum: ["ai", "standard"],
+      default: "standard",
+    },
+    capabilityLevel: {
+      type: String,
+      default: "Capable Founder",
+    },
     archetype: {
       type: String,
       required: true,
       trim: true,
-      default: "Strategic Visionary",
+      default: "Visionary Builder",
+    },
+    archetypeIcon: {
+      type: String,
+      default: "⚡",
+    },
+    archetypeDescription: {
+      type: String,
+      default: "",
     },
     domainScores: {
-      strategy: scoreField,
-      operations: scoreField,
-      finance: scoreField,
       leadership: scoreField,
+      strategy: scoreField,
+      finance: scoreField,
       marketing: scoreField,
+      operations: scoreField,
+      product: scoreField,
     },
     subskillScores: {
       type: Map,
@@ -51,8 +69,28 @@ const assessmentSchema = new mongoose.Schema(
     },
     answers: {
       type: Map,
-      of: String,
+      of: mongoose.Schema.Types.Mixed,
       default: {},
+    },
+    strengths: {
+      type: Array,
+      default: [],
+    },
+    weaknesses: {
+      type: Array,
+      default: [],
+    },
+    recommendations: {
+      type: Array,
+      default: [],
+    },
+    questionResults: {
+      type: Array,
+      default: [],
+    },
+    durationMinutes: {
+      type: Number,
+      default: 0,
     },
     reviewStatus: {
       type: String,
@@ -82,15 +120,12 @@ assessmentSchema.index({
   createdAt: -1,
 });
 
-// Find assessments belonging to a particular user
-// inside a company.
 assessmentSchema.index({
   companyId: 1,
   userId: 1,
   createdAt: -1,
 });
 
-// Useful for admin/reviewer dashboards.
 assessmentSchema.index({
   companyId: 1,
   reviewStatus: 1,
