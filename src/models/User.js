@@ -132,6 +132,50 @@ const userSchema = new mongoose.Schema(
     // ACCOUNT STATUS
     // =========================
 
+    
+    // =========================
+    // SUBSCRIPTION & BILLING
+    // =========================
+
+    subscription: {
+      plan: {
+        type: String,
+        enum: ["free", "founder_pro", "investor_pro", "all_access_pro"],
+        default: "free",
+        index: true,
+      },
+      status: {
+        type: String,
+        enum: ["active", "canceled", "expired", "trialing"],
+        default: "active",
+      },
+      billingCycle: {
+        type: String,
+        enum: ["monthly", "annual"],
+        default: "monthly",
+      },
+      startDate: {
+        type: Date,
+        default: Date.now,
+      },
+      expiresAt: {
+        type: Date,
+        default: null,
+      },
+      razorpayOrderId: {
+        type: String,
+        default: "",
+      },
+      razorpayPaymentId: {
+        type: String,
+        default: "",
+      },
+      amountPaid: {
+        type: Number,
+        default: 0,
+      },
+    },
+
     accountStatus: {
       type: String,
       enum: ["Active", "Inactive", "Suspended", "Pending"],

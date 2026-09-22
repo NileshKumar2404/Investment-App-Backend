@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 
 // Connect to MongoDB and start HTTP Server
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`=======================================================`);
     console.log(`🚀 Investment Intelligence OS Backend Running`);
     console.log(`📡 PORT: ${PORT}`);

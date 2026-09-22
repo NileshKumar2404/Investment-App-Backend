@@ -24,6 +24,8 @@ import actionPlanRoutes from "./routes/actionPlanRoutes.js";
 import aiPromptBuilderRoutes from "./routes/aiPromptBuilderRoutes.js";
 import startupHealthScoreRoutes from "./routes/startupHealthScoreRoutes.js";
 import learningCurriculumRoutes from "./routes/learningCurriculumRoutes.js";
+import subscriptionRoutes from "./routes/subscriptionRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
 
 import { ApiError } from "./utils/ApiError.js";
@@ -182,6 +184,8 @@ app.use("/api/v1/action-plan", actionPlanRoutes);
 app.use("/api/v1/ai-prompt-builder", aiPromptBuilderRoutes);
 app.use("/api/v1/startup-health", startupHealthScoreRoutes);
 app.use("/api/v1/learning", learningCurriculumRoutes);
+app.use("/api/v1/subscription", subscriptionRoutes);
+app.use("/api/v1/ai", aiRoutes);
 
 app.use((req, res, next) => {
   next(new ApiError(404, "The requested resource was not found"));
