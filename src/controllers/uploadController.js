@@ -1,3 +1,4 @@
+import { createAuditLogFromRequest } from "./auditLogController.js";
 import multer from "multer";
 import cloudinary from "../config/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -434,6 +435,20 @@ export const downloadDocument = async (req, res, next) => {
       sign_url: true,
       attachment: false,
     });
+
+    void createAuditLogFromRequest({
+      req,
+      action: "DOWNLOAD_DOCUMENT",
+      resourceType: "DOCUMENT",
+      resourceId: document._id,
+      companyId: document.companyId,
+      message: `User downloaded document ${document.originalFileName}`,
+      metadata: {
+        fileName: document.originalFileName,
+        mimeType: document.mimeType,
+        size: document.size,
+      },
+    }).catch((err) => console.error("Audit log error:", err));
 
     return res.status(200).json(
       new ApiResponse(

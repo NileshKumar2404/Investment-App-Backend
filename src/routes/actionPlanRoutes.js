@@ -1,5 +1,5 @@
 import express from "express";
-import { protect } from "../middleware/authMiddleware.js";
+import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 import {
   requireCompanyAccess,
   requireCompanyPermission,
@@ -9,6 +9,7 @@ import { getActionPlan } from "../controllers/actionPlanController.js";
 const router = express.Router();
 
 router.use(protect);
+router.use(authorizeRoles('founder', 'advisor', 'admin', 'super_admin'));
 router.use("/:ticker", requireCompanyAccess());
 
 router.get(

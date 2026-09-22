@@ -226,3 +226,58 @@ export const createNotification = async ({
     expiresAt,
   });
 };
+
+export const getNotificationPreferences = asyncHandler(async (req, res) => {
+  const User = (await import('../models/User.js')).default;
+  const user = await User.findById(req.user._id).select('notificationPreferences');
+  
+  const defaultPrefs = {
+    revenue: true,
+    documents: true,
+    reports: true,
+    investments: true,
+    approvals: true,
+    risk: true,
+    system: true,
+  };
+
+  const preferences = user?.notificationPreferences || defaultPrefs;
+
+  return res.status(200).json(
+    new ApiResponse(200, preferences, 'Notification preferences retrieved successfully.')
+  );
+});
+
+export const updateNotificationPreferences = asyncHandler(async (req, res) => {
+  const User = (await import('../models/User.js')).default;
+  const allowedKeys = ['revenue', 'documents', 'reports', 'investments', 'approvals', 'risk', 'system'];
+  
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new ApiError(404, 'User not found.');
+  }
+
+  if (!user.notificationPreferences) {
+    user.notificationPreferences = {
+      revenue: true,
+      documents: true,
+      reports: true,
+      investments: true,
+      approvals: true,
+      risk: true,
+      system: true
+    };
+  }
+
+  for (const key of allowedKeys) {
+    if (typeof req.body[key] === 'boolean') {
+      user.notificationPreferences[key] = req.body[key];
+    }
+  }
+
+  await user.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, user.notificationPreferences, 'Notification preferences updated successfully.')
+  );
+});

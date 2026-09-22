@@ -4,6 +4,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import companyRoutes from "./routes/companyRoutes.js";
 import ledgerRoutes from "./routes/ledgerRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
@@ -164,6 +165,7 @@ app.use((req, res, next) => {
 app.use(auditRequestMiddleware);
 
 app.use("/api/v1/auth", authLimiter, authRoutes);
+app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/companies", companyRoutes);
 app.use("/api/v1/ledger", ledgerRoutes);
 app.use("/api/v1/upload", uploadRoutes);

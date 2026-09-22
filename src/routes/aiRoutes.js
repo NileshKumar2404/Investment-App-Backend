@@ -1,3 +1,4 @@
+import { protect } from '../middleware/authMiddleware.js';
 import express from 'express';
 import { executeAIAnalysis, getAIStatus } from '../services/aiService.js';
 import Company from '../models/Company.js';
@@ -11,7 +12,7 @@ const router = express.Router();
  * GET /api/v1/ai/status
  * Returns current status of AI providers (Gemini, OpenAI, Built-in)
  */
-router.get('/status', (req, res) => {
+router.get('/status', protect, (req, res) => {
   const status = getAIStatus();
   return res.status(200).json(new ApiResponse(200, status, 'AI status retrieved'));
 });
@@ -20,7 +21,7 @@ router.get('/status', (req, res) => {
  * POST /api/v1/ai/generate
  * Executes structured prompt with live LLM or Venture Core engine
  */
-router.post('/generate', asyncHandler(async (req, res) => {
+router.post('/generate', protect, asyncHandler(async (req, res) => {
   const { prompt, ticker, type, goal, systemInstruction } = req.body || {};
 
   let company = {};
@@ -50,7 +51,7 @@ router.post('/generate', asyncHandler(async (req, res) => {
  * POST /api/v1/ai/copilot
  * Conversational venture copilot endpoint
  */
-router.post('/copilot', asyncHandler(async (req, res) => {
+router.post('/copilot', protect, asyncHandler(async (req, res) => {
   const { message, ticker, conversationHistory } = req.body || {};
 
   let company = {};

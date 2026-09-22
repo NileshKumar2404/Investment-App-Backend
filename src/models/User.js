@@ -235,6 +235,16 @@ const userSchema = new mongoose.Schema(
     // PROFILE
     // =========================
 
+    notificationPreferences: {
+      revenue: { type: Boolean, default: true },
+      documents: { type: Boolean, default: true },
+      reports: { type: Boolean, default: true },
+      investments: { type: Boolean, default: true },
+      approvals: { type: Boolean, default: true },
+      risk: { type: Boolean, default: true },
+      system: { type: Boolean, default: true },
+    },
+
     avatarUrl: {
       type: String,
       trim: true,
