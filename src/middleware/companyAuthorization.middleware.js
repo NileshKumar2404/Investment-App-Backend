@@ -130,7 +130,7 @@ const findCompany = async (ticker) => {
 // FIND ACTIVE MEMBERSHIP
 // ============================================================
 
-const findMembership = async (userId, companyId) => {
+const findMembership = async (userId, companyId, company = null, userRole = "") => {
   if (!mongoose.Types.ObjectId.isValid(companyId)) {
     throw new ApiError(400, "Invalid company identifier.");
   }
@@ -141,11 +141,31 @@ const findMembership = async (userId, companyId) => {
     status: "ACTIVE",
   });
 
-  if (!membership) {
-    throw new ApiError(403, "You do not have access to this company.");
+  if (membership) {
+    return membership;
   }
 
-  return membership;
+  // If user is the registered owner of this company, auto-grant OWNER
+  if (company && company.userId && String(company.userId) === String(userId)) {
+    return {
+      userId,
+      companyId,
+      roleOnCompany: COMPANY_ROLES.OWNER,
+      status: "ACTIVE",
+    };
+  }
+
+  // If company is a preset benchmark, or viewer is investor/analyst/advisor/admin, grant VIEWER
+  if (company && (company.isPreset || ["investor", "analyst", "advisor", "admin", "super_admin"].includes(userRole))) {
+    return {
+      userId,
+      companyId,
+      roleOnCompany: COMPANY_ROLES.VIEWER,
+      status: "ACTIVE",
+    };
+  }
+
+  throw new ApiError(403, "You do not have access to this company.");
 };
 
 // ============================================================
@@ -163,7 +183,12 @@ export const requireCompanyAccess = () => {
 
       const company = await findCompany(ticker);
 
-      const membership = await findMembership(req.user._id, company._id);
+      const membership = await findMembership(
+        req.user._id,
+        company._id,
+        company,
+        req.user?.role,
+      );
 
       const companyRole = normalizeRole(membership.roleOnCompany);
 
@@ -202,7 +227,12 @@ export const requireCompanyPermission = (permission) => {
 
         const company = await findCompany(ticker);
 
-        const membership = await findMembership(req.user._id, company._id);
+        const membership = await findMembership(
+          req.user._id,
+          company._id,
+          company,
+          req.user?.role,
+        );
 
         req.company = company;
 
@@ -249,7 +279,12 @@ export const requireCompanyRole = (...allowedRoles) => {
 
         const company = await findCompany(ticker);
 
-        const membership = await findMembership(req.user._id, company._id);
+        const membership = await findMembership(
+          req.user._id,
+          company._id,
+          company,
+          req.user?.role,
+        );
 
         req.company = company;
 

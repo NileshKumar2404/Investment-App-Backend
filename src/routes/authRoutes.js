@@ -12,6 +12,7 @@ import {
   forgotPassword,
   resetPassword,
   refreshToken,
+  saveOnboarding,
 } from "../controllers/authController.js";
 
 import { protect } from "../middleware/authMiddleware.js";
@@ -37,6 +38,8 @@ router.post("/reset-password", resetPassword);
 // ============================================================
 
 router.get("/me", protect, getMe);
+
+router.patch("/onboarding", protect, saveOnboarding);
 
 router.post("/logout", protect, logoutUser);
 

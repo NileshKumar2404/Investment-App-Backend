@@ -103,6 +103,16 @@ const sanitizeUser = (user) => ({
     status: "active",
     billingCycle: "monthly"
   },
+
+  onboarding: user.onboarding || {
+    completed: false,
+    investmentKnowledge: "",
+    experienceYears: "",
+    primaryObjective: "",
+    assignedWorkspace: user.role || "founder",
+    assignedTab: "overview",
+    routingReason: "",
+  },
 });
 
 // ============================================================
@@ -145,7 +155,7 @@ const createSession = async ({ user, req }) => {
 // ============================================================
 
 export const registerUser = asyncHandler(async (req, res) => {
-  const { email, password, fullName, phone, country, language, currency } =
+  const { email, password, fullName, phone, country, language, currency, role } =
     req.body;
 
   // --------------------------------------------------------
@@ -179,13 +189,13 @@ export const registerUser = asyncHandler(async (req, res) => {
   // --------------------------------------------------------
 
   /**
-   * Public registration always
-   * creates a Founder account.
-   *
-   * Admin and Super Admin must
-   * never be self-assigned from
-   * the registration request.
+   * Public registration supports founder, investor,
+   * analyst, and advisor roles. Admin and Super Admin
+   * must never be self-assigned.
    */
+  const allowedRoles = ["founder", "investor", "analyst", "advisor"];
+  const assignedRole = role && allowedRoles.includes(role.toLowerCase()) ? role.toLowerCase() : "founder";
+
   const user = await User.create({
     email: normalizedEmail,
 
@@ -201,7 +211,7 @@ export const registerUser = asyncHandler(async (req, res) => {
 
     currency: currency || "INR",
 
-    role: "founder",
+    role: assignedRole,
 
     accountStatus: "Active",
 
@@ -919,6 +929,68 @@ export const refreshToken = asyncHandler(async (req, res) => {
         user: sanitizeUser(user),
       },
       "Token refreshed successfully.",
+    ),
+  );
+});
+
+// ============================================================
+// SAVE ONBOARDING PREFERENCES
+// PATCH /api/v1/auth/onboarding
+// ============================================================
+
+export const saveOnboarding = asyncHandler(async (req, res) => {
+  if (!req.user) {
+    throw new ApiError(401, "Authentication required.");
+  }
+
+  const {
+    investmentKnowledge,
+    experienceYears,
+    primaryObjective,
+    assignedWorkspace,
+    assignedTab,
+    routingReason,
+  } = req.body;
+
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    throw new ApiError(404, "User not found.");
+  }
+
+  user.onboarding = {
+    completed: true,
+    investmentKnowledge: investmentKnowledge || "",
+    experienceYears: experienceYears || "",
+    primaryObjective: primaryObjective || "",
+    assignedWorkspace: assignedWorkspace || user.role,
+    assignedTab: assignedTab || "overview",
+    routingReason: routingReason || "",
+    completedAt: new Date(),
+  };
+
+  await user.save();
+
+  await createAuditLogFromRequest({
+    req,
+    action: "ONBOARDING_COMPLETED",
+    resourceType: "USER",
+    resourceId: user._id,
+    targetUserId: user._id,
+    success: true,
+    statusCode: 200,
+    message: "User diagnostic onboarding completed",
+    metadata: {
+      assignedWorkspace: user.onboarding.assignedWorkspace,
+      assignedTab: user.onboarding.assignedTab,
+    },
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      sanitizeUser(user),
+      "Onboarding preferences saved successfully.",
     ),
   );
 });

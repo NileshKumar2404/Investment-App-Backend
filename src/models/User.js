@@ -43,8 +43,9 @@ const userSchema = new mongoose.Schema(
 
     phone: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
+      default: "-",
     },
 
     country: {
@@ -243,6 +244,17 @@ const userSchema = new mongoose.Schema(
       approvals: { type: Boolean, default: true },
       risk: { type: Boolean, default: true },
       system: { type: Boolean, default: true },
+    },
+
+    onboarding: {
+      completed: { type: Boolean, default: false },
+      investmentKnowledge: { type: String, default: "" },
+      experienceYears: { type: String, default: "" },
+      primaryObjective: { type: String, default: "" },
+      assignedWorkspace: { type: String, default: "" },
+      assignedTab: { type: String, default: "" },
+      routingReason: { type: String, default: "" },
+      completedAt: { type: Date, default: null },
     },
 
     avatarUrl: {
