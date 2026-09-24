@@ -72,45 +72,60 @@ const applyAliases = (updates) => {
   return next;
 };
 
-const buildProfilePayload = (company) => ({
-  company: {
-    id: company._id,
-    ticker: company.ticker,
-    companyName: company.companyName,
-    industry: company.industry,
-    sector: company.sector,
-    foundingYear: company.foundingYear,
-    website: company.website,
-    businessEmail: company.businessEmail,
-    businessPhone: company.businessPhone,
-    country: company.country,
-    city: company.city,
-    founderName: company.founderName,
-    coFounderNames: company.coFounderNames,
-    headcount: company.headcount,
-    businessExperience: company.businessExperience,
-    productsServices: company.productsServices,
-    targetAudience: company.targetAudience,
-    currentRevenue: company.currentRevenue,
-    monthlyExpenses: company.monthlyExpenses,
-    revenueGrowthRate: company.revenueGrowthRate,
-    grossMargin: company.grossMargin,
-    cashBalance: company.cashBalance,
-    customers: company.customers,
-    leads: company.leads,
-    cac: company.cac,
-    ltv: company.ltv,
-    conversionRate: company.conversionRate,
-    tam: company.tam,
-    sam: company.sam,
-    som: company.som,
-    marketingBudget: company.marketingBudget,
-    marketingSpend: company.marketingSpend,
-    churnRate: company.churnRate,
-    updatedAt: company.updatedAt,
-  },
-  metrics: calculateStartupMetrics(company),
-});
+const buildProfilePayload = (company) => {
+  const currentRev = company.currentRevenue ?? company.monthlyRevenue ?? 0;
+  const monthlyExp = company.monthlyExpenses ?? company.monthlyBurn ?? 0;
+  const cashBal = company.cashBalance ?? company.cashAvailable ?? 0;
+  const growth = company.revenueGrowthRate ?? company.growthRate ?? 0;
+
+  return {
+    company: {
+      id: company._id,
+      ticker: company.ticker,
+      name: company.companyName,
+      companyName: company.companyName,
+      industry: company.industry,
+      sector: company.sector,
+      stage: company.stage || 'Seed',
+      foundingYear: company.foundingYear,
+      website: company.website,
+      businessEmail: company.businessEmail,
+      businessPhone: company.businessPhone,
+      country: company.country,
+      city: company.city,
+      founderName: company.founderName,
+      coFounderNames: company.coFounderNames,
+      headcount: company.headcount,
+      businessExperience: company.businessExperience,
+      productsServices: company.productsServices,
+      targetAudience: company.targetAudience,
+      currentRevenue: currentRev,
+      monthlyRevenue: company.monthlyRevenue ?? currentRev,
+      mrr: company.mrr ?? company.monthlyRevenue ?? currentRev,
+      monthlyExpenses: monthlyExp,
+      monthlyBurn: company.monthlyBurn ?? monthlyExp,
+      revenueGrowthRate: growth,
+      growthRate: company.growthRate ?? growth,
+      grossMargin: company.grossMargin ?? 70,
+      ebitdaMargin: company.ebitdaMargin ?? 20,
+      cashBalance: cashBal,
+      cashAvailable: company.cashAvailable ?? cashBal,
+      customers: company.customers ?? 0,
+      leads: company.leads ?? 0,
+      cac: company.cac ?? 0,
+      ltv: company.ltv ?? 0,
+      conversionRate: company.conversionRate ?? 0,
+      tam: company.tam,
+      sam: company.sam,
+      som: company.som,
+      marketingBudget: company.marketingBudget,
+      marketingSpend: company.marketingSpend,
+      churnRate: company.churnRate ?? 0,
+      updatedAt: company.updatedAt,
+    },
+    metrics: calculateStartupMetrics(company),
+  };
+};
 
 const logActivity = async (companyId, userId, action, description, metadata = {}) => {
   try {
