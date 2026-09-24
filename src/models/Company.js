@@ -321,7 +321,6 @@ const companySchema = new mongoose.Schema(
 
       uppercase: true,
       trim: true,
-      index: true,
     },
 
     companyName: {

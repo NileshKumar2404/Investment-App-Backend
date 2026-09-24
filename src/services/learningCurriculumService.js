@@ -11,7 +11,16 @@ const fullDataPath = path.join(__dirname, '../data/curriculumFullData.json');
 function loadLessons() {
   try {
     const raw = fs.readFileSync(fullDataPath, 'utf8');
-    return JSON.parse(raw);
+    const list = JSON.parse(raw);
+    return list.map((lesson) => {
+      const category = lesson.category === 'CAPSTONE' ? 'OPERATIONS' : (lesson.category || 'FOUNDATIONS');
+      const exercise = lesson.exercise || lesson.worksheet?.prompt || `Execute the ${lesson.title} exercise for your company.`;
+      return {
+        ...lesson,
+        category,
+        exercise,
+      };
+    });
   } catch (err) {
     console.error('Error reading curriculumFullData.json:', err.message);
     return [];
@@ -49,28 +58,42 @@ export const getLessonById = (id) => {
 
 export const getLearningCategories = () => {
   const lessons = loadLessons();
-  const categories = [...new Set(lessons.map((l) => l.category).filter(Boolean))];
-  return {
-    categories,
-    count: categories.length,
-  };
+  const categoryKeys = [...new Set(lessons.map((lesson) => lesson.category))];
+  const list = categoryKeys.map((category) => ({
+    id: category,
+    name: category
+      .split('_')
+      .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+      .join(' '),
+    lessonCount: lessons.filter((lesson) => lesson.category === category).length,
+  }));
+  list.categories = categoryKeys;
+  list.count = list.length;
+  return list;
 };
 
 export const getCurriculumSummary = () => {
   const lessons = loadLessons();
+  const categories = getLearningCategories();
   const totalMinutes = lessons.reduce((sum, l) => sum + (l.estimatedMinutes || 25), 0);
-  const categories = [...new Set(lessons.map((l) => l.category).filter(Boolean))];
+
+  const difficultyCounts = {
+    BEGINNER: lessons.filter((l) => l.difficulty === 'BEGINNER').length,
+    INTERMEDIATE: lessons.filter((l) => l.difficulty === 'INTERMEDIATE').length,
+    ADVANCED: lessons.filter((l) => l.difficulty === 'ADVANCED').length,
+  };
 
   return {
     totalLessons: lessons.length,
     totalEstimatedMinutes: totalMinutes,
     totalEstimatedHours: (totalMinutes / 60).toFixed(1),
-    categoriesCount: categories.length,
     categories,
+    categoriesCount: categories.length,
+    difficultyCounts,
     difficulties: {
-      beginner: lessons.filter((l) => l.difficulty === 'BEGINNER').length,
-      intermediate: lessons.filter((l) => l.difficulty === 'INTERMEDIATE').length,
-      advanced: lessons.filter((l) => l.difficulty === 'ADVANCED').length,
+      beginner: difficultyCounts.BEGINNER,
+      intermediate: difficultyCounts.INTERMEDIATE,
+      advanced: difficultyCounts.ADVANCED,
     },
   };
 };

@@ -17,6 +17,8 @@ import {
   requireCompanyAccess,
   requireCompanyPermission,
   requireCompanyManagement,
+  requireCompanyRole,
+  COMPANY_ROLES,
 } from "../middleware/companyAuthorization.middleware.js";
 
 const router = express.Router();
@@ -75,10 +77,27 @@ router.patch(
   updateAssessment
 );
 
+router.patch(
+  "/:ticker/:id/review",
+  requireCompanyAccess(),
+  requireCompanyRole(
+    COMPANY_ROLES.OWNER,
+    COMPANY_ROLES.FOUNDER,
+    COMPANY_ROLES.CO_FOUNDER,
+    COMPANY_ROLES.ANALYST
+  ),
+  reviewAssessment
+);
+
 router.post(
   "/:ticker/:id/review",
   requireCompanyAccess(),
-  requireCompanyManagement,
+  requireCompanyRole(
+    COMPANY_ROLES.OWNER,
+    COMPANY_ROLES.FOUNDER,
+    COMPANY_ROLES.CO_FOUNDER,
+    COMPANY_ROLES.ANALYST
+  ),
   reviewAssessment
 );
 
