@@ -8,6 +8,7 @@ import { Document } from "../models/document.js";
 import crypto from "crypto";
 import mongoose from "mongoose";
 import CompanyMember from "../models/CompanyMember.js";
+import Company from "../models/Company.js";
 
 const storage = multer.memoryStorage();
 
@@ -308,21 +309,59 @@ const getDocumentById = async (documentId) => {
   return document;
 };
 
-const verifyDocumentCompanyAccess = async (userId, companyId) => {
+const verifyDocumentCompanyAccess = async (userOrId, companyId) => {
+  const userId = userOrId?._id || userOrId;
+  const userRole = userOrId?.role || "";
+
   const membership = await CompanyMember.findOne({
     userId,
     companyId,
     status: "ACTIVE",
   });
 
-  if (!membership) {
-    throw new ApiError(
-      400,
-      "You do not have access to this company's documents.",
-    );
+  if (membership) {
+    return membership;
   }
 
-  return membership;
+  const company = await Company.findById(companyId);
+  if (!company) {
+    throw new ApiError(404, "Company not found.");
+  }
+
+  // If user is registered company owner
+  if (company.userId && String(company.userId) === String(userId)) {
+    return {
+      userId,
+      companyId,
+      roleOnCompany: "OWNER",
+      status: "ACTIVE",
+    };
+  }
+
+  // Platform admins have full management access
+  if (["admin", "super_admin"].includes(userRole)) {
+    return {
+      userId,
+      companyId,
+      roleOnCompany: "OWNER",
+      status: "ACTIVE",
+    };
+  }
+
+  // Preset companies or authorized investment viewers have read access
+  if (company.isPreset || ["investor", "analyst", "advisor"].includes(userRole)) {
+    return {
+      userId,
+      companyId,
+      roleOnCompany: "VIEWER",
+      status: "ACTIVE",
+    };
+  }
+
+  throw new ApiError(
+    403,
+    "You do not have access to this company's documents.",
+  );
 };
 
 export const getCompanyDocuments = async (req, res, next) => {
@@ -392,7 +431,7 @@ export const getDocumentDetails = async (req, res, next) => {
 
     const document = await getDocumentById(req.params.id);
 
-    await verifyDocumentCompanyAccess(req.user._id, document.companyId);
+    await verifyDocumentCompanyAccess(req.user, document.companyId);
 
     const result = await Document.findById(document._id)
       .populate("uploadedByUserId", "fullName email")
@@ -421,7 +460,7 @@ export const downloadDocument = async (req, res, next) => {
 
     const document = await getDocumentById(req.params.id);
 
-    await verifyDocumentCompanyAccess(req.user._id, document.companyId);
+    await verifyDocumentCompanyAccess(req.user, document.companyId);
 
     if (!document.storageKey) {
       return next(new ApiError(404, "Document storage reference not found"));
@@ -479,7 +518,7 @@ export const updateDocumentStatus = async (req, res, next) => {
     const document = await getDocumentById(req.params.id);
 
     const membership = await verifyDocumentCompanyAccess(
-      req.user._id,
+      req.user,
       document.companyId,
     );
 
@@ -553,7 +592,7 @@ export const deleteDocument = async (req, res, next) => {
     const document = await getDocumentById(req.params.id);
 
     const membership = await verifyDocumentCompanyAccess(
-      req.user._id,
+      req.user,
       document.companyId,
     );
 
