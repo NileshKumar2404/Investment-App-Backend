@@ -969,6 +969,10 @@ export const saveOnboarding = asyncHandler(async (req, res) => {
     completedAt: new Date(),
   };
 
+  if (assignedWorkspace && ["founder", "investor", "analyst", "advisor"].includes(assignedWorkspace)) {
+    user.role = assignedWorkspace;
+  }
+
   await user.save();
 
   await createAuditLogFromRequest({
