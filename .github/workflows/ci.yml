@@ -25,6 +25,7 @@ jobs:
     env:
       NODE_ENV: test
       MONGO_URI: mongodb://127.0.0.1:27017/investment_os_ci
+      REDIS_URL: redis://127.0.0.1:6379
       JWT_SECRET: ci-only-investment-backend-test-secret
       JWT_EXPIRES_IN: 15m
       REFRESH_TOKEN_EXPIRES_DAYS: 1
@@ -46,15 +47,36 @@ jobs:
         run: |
           docker run -d --name investment-mongodb-ci -p 27017:27017 mongo:8.0
           echo "Waiting for MongoDB..."
+
           for attempt in {1..30}; do
             if docker exec investment-mongodb-ci mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '^1$'; then
               echo "MongoDB is ready."
               exit 0
             fi
+
             sleep 2
           done
+
           echo "MongoDB did not become ready in time. Container logs:"
           docker logs investment-mongodb-ci
+          exit 1
+
+      - name: Start Redis for integration tests
+        run: |
+          docker run -d --name investment-redis-ci -p 6379:6379 redis:7-alpine
+          echo "Waiting for Redis..."
+
+          for attempt in {1..30}; do
+            if docker exec investment-redis-ci redis-cli ping 2>/dev/null | grep -q '^PONG$'; then
+              echo "Redis is ready."
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "Redis did not become ready in time. Container logs:"
+          docker logs investment-redis-ci
           exit 1
 
       - name: Install dependencies
@@ -73,6 +95,14 @@ jobs:
         if: failure()
         run: docker logs investment-mongodb-ci || true
 
+      - name: Show Redis logs on failure
+        if: failure()
+        run: docker logs investment-redis-ci || true
+
       - name: Stop MongoDB
         if: always()
         run: docker rm -f investment-mongodb-ci || true
+
+      - name: Stop Redis
+        if: always()
+        run: docker rm -f investment-redis-ci || true
