@@ -4,7 +4,7 @@ import {
   requireCompanyAccess,
   requireCompanyPermission,
 } from "../middleware/companyAuthorization.middleware.js";
-import { getActionPlan } from "../controllers/actionPlanController.js";
+import { getActionPlan, verifyTaskProof } from "../controllers/actionPlanController.js";
 
 const router = express.Router();
 
@@ -16,6 +16,12 @@ router.get(
   "/:ticker",
   requireCompanyPermission("VIEW"),
   getActionPlan,
+);
+
+router.post(
+  "/:ticker/verify-task",
+  requireCompanyPermission("EDIT"),
+  verifyTaskProof,
 );
 
 export default router;
