@@ -28,6 +28,8 @@ import learningCurriculumRoutes from "./routes/learningCurriculumRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import { auditRequestMiddleware } from "./middleware/auditRequestMiddleware.js";
+import mongoose from "mongoose";
+import { getRedisHealth } from "./services/redisCacheService.js";
 
 import { ApiError } from "./utils/ApiError.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
@@ -118,7 +120,9 @@ app.use(
   }),
 );
 
-app.get("/health", (req, res) => {
+app.get("/health", async (req, res) => {
+  const redisHealth = await getRedisHealth();
+  const dbConnected = mongoose.connection.readyState === 1;
   return res.status(200).json(
     new ApiResponse(
       200,
@@ -126,13 +130,22 @@ app.get("/health", (req, res) => {
         status: "online",
         system: "Investment Intelligence OS Backend",
         timestamp: new Date().toISOString(),
+        database: {
+          status: dbConnected ? "connected" : "disconnected",
+          name: mongoose.connection.name || "investment_os",
+        },
+        redis: redisHealth,
+        uptimeSeconds: Math.round(process.uptime()),
+        memoryMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       },
       "Health check passed",
     ),
   );
 });
 
-app.get("/api/v1/health", (req, res) => {
+app.get("/api/v1/health", async (req, res) => {
+  const redisHealth = await getRedisHealth();
+  const dbConnected = mongoose.connection.readyState === 1;
   return res.status(200).json(
     new ApiResponse(
       200,
@@ -140,6 +153,11 @@ app.get("/api/v1/health", (req, res) => {
         status: "online",
         version: "1.0.0",
         system: "Investment Intelligence OS REST API",
+        database: {
+          status: dbConnected ? "connected" : "disconnected",
+          name: mongoose.connection.name || "investment_os",
+        },
+        redis: redisHealth,
       },
       "API v1 health check passed",
     ),

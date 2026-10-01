@@ -20,6 +20,10 @@ import {
 } from "../controllers/companyController.js";
 
 import { protect } from "../middleware/authMiddleware.js";
+import {
+  cacheMiddleware,
+  invalidateCacheMiddleware,
+} from "../middleware/cacheMiddleware.js";
 
 import {
   requireCompanyAccess,
@@ -30,29 +34,67 @@ import {
 
 const router = express.Router();
 
-// Get companies accessible to the logged-in user
-router.get("/", protect, getCompanies);
+// Get companies accessible to the logged-in user (cached for 2 min per user)
+router.get("/", protect, cacheMiddleware(120), getCompanies);
 
 // Search companies accessible to the logged-in user
-router.get("/search", protect, searchCompanies);
-router.get("/:ticker", protect, requireCompanyAccess(), getCompanyByTicker);
-router.post("/", protect, saveCompany);
+router.get("/search", protect, cacheMiddleware(60), searchCompanies);
 
-router.delete("/:ticker", protect, requireCompanyOwner, deleteCompany);
+// Get single company by ticker (cached for 5 min)
+router.get("/:ticker", protect, requireCompanyAccess(), cacheMiddleware(300), getCompanyByTicker);
 
+// Create or update company -> invalidate company lists & ticker cache
+router.post(
+  "/",
+  protect,
+  invalidateCacheMiddleware((req) => [
+    "companies:user:*",
+    `company:${req.body?.ticker}*`,
+    "route:*/companies*",
+    `route:*/startup-profile/${req.body?.ticker}*`,
+    `route:*/startup-health/${req.body?.ticker}*`
+  ]),
+  saveCompany
+);
 
-// View KYC
-router.get("/:ticker/kyc", protect, requireCompanyAccess(), getKyc);
+router.delete(
+  "/:ticker",
+  protect,
+  requireCompanyOwner,
+  invalidateCacheMiddleware((req) => [
+    "companies:user:*",
+    `company:${req.params?.ticker}*`,
+    "route:*/companies*",
+    `route:*/startup-profile/${req.params?.ticker}*`
+  ]),
+  deleteCompany
+);
 
-router.put("/:ticker/kyc", protect, requireCompanyManagement, updateKyc);
+// View KYC (cached 5 min)
+router.get("/:ticker/kyc", protect, requireCompanyAccess(), cacheMiddleware(300), getKyc);
 
-router.get("/:ticker/funding", protect, requireCompanyAccess(), getFunding);
+router.put(
+  "/:ticker/kyc",
+  protect,
+  requireCompanyManagement,
+  invalidateCacheMiddleware((req) => [
+    `company:${req.params?.ticker}*`,
+    `route:*/companies/${req.params?.ticker}*`
+  ]),
+  updateKyc
+);
+
+router.get("/:ticker/funding", protect, requireCompanyAccess(), cacheMiddleware(300), getFunding);
 
 router.put(
   "/:ticker/funding",
   protect,
   requireCompanyManagement,
-  updateFunding,
+  invalidateCacheMiddleware((req) => [
+    `company:${req.params?.ticker}*`,
+    `route:*/companies/${req.params?.ticker}*`
+  ]),
+  updateFunding
 );
 
 // Update SWOT
@@ -60,7 +102,11 @@ router.post(
   "/:ticker/swot",
   protect,
   requireCompanyPermission("EDIT_ANALYSIS"),
-  updateSwot,
+  invalidateCacheMiddleware((req) => [
+    `company:${req.params?.ticker}*`,
+    `route:*/companies/${req.params?.ticker}*`
+  ]),
+  updateSwot
 );
 
 // Update PESTLE
@@ -68,27 +114,46 @@ router.post(
   "/:ticker/pestle",
   protect,
   requireCompanyPermission("EDIT_ANALYSIS"),
-  updatePestle,
+  invalidateCacheMiddleware((req) => [
+    `company:${req.params?.ticker}*`,
+    `route:*/companies/${req.params?.ticker}*`
+  ]),
+  updatePestle
 );
+
 router.post(
   "/:ticker/assessment",
   protect,
   requireCompanyPermission("EDIT"),
-  submitAssessment,
+  invalidateCacheMiddleware((req) => [
+    `company:${req.params?.ticker}*`,
+    `route:*/companies/${req.params?.ticker}*`
+  ]),
+  submitAssessment
 );
-router.get("/:ticker/members", protect, requireCompanyAccess(), getTeamMembers);
+
+router.get("/:ticker/members", protect, requireCompanyAccess(), cacheMiddleware(120), getTeamMembers);
+
 router.post(
   "/:ticker/members",
   protect,
   requireCompanyManagement,
-  addTeamMember,
+  invalidateCacheMiddleware((req) => [
+    `route:*/companies/${req.params?.ticker}/members*`
+  ]),
+  addTeamMember
 );
+
 router.put(
   "/:ticker/team",
   protect,
   requireCompanyManagement,
-  updateTeamRoster,
+  invalidateCacheMiddleware((req) => [
+    `route:*/companies/${req.params?.ticker}/members*`
+  ]),
+  updateTeamRoster
 );
-router.get("/:ticker/timeline", protect, requireCompanyAccess(), getTimeline);
+
+router.get("/:ticker/timeline", protect, requireCompanyAccess(), cacheMiddleware(120), getTimeline);
 
 export default router;
