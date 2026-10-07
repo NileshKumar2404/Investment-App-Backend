@@ -48,26 +48,46 @@ app.use(
   }),
 );
 
-const configuredOrigins = (
-  process.env.FRONTEND_URL || "http://localhost:3000,http://localhost:5173"
-)
-  .split(",")
-  .map((origin) => origin.trim())
+const defaultOrigins = [
+  "https://teledu-investment-frontend.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "http://127.0.0.1:5175",
+];
+
+const configuredOrigins = [
+  ...defaultOrigins,
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",") : []),
+]
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
   .filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
       if (!origin) {
         return callback(null, true);
       }
 
-      const isDevLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-      if (configuredOrigins.includes(origin) || isDevLocalhost) {
+      const normalizedOrigin = origin.trim().replace(/\/+$/, "");
+      const isDevLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin);
+      const isVercelDomain = /^https?:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(normalizedOrigin) || normalizedOrigin.endsWith(".vercel.app");
+
+      if (
+        configuredOrigins.includes(normalizedOrigin) ||
+        isDevLocalhost ||
+        isVercelDomain
+      ) {
         return callback(null, true);
       }
 
-      return callback(new ApiError(403, "Origin is not allowed"));
+      return callback(new ApiError(403, `Origin ${origin} is not allowed by CORS`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -76,6 +96,8 @@ app.use(
       "Authorization",
       "X-Requested-With",
       "X-Device-Name",
+      "Accept",
+      "Origin",
     ],
   }),
 );
